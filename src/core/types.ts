@@ -101,6 +101,8 @@ export interface WitnessReport {
   droppedForType?: number;
   /** Branches executed by the model's inputs, out of all instrumented branches. */
   coverage?: { old: { covered: number; total: number }; new: { covered: number; total: number } };
+  /** Set when every trial threw the same error name on both sides: the function never ran normally. */
+  neverRan?: { name: string; message: string };
 }
 
 export type Label = 'bug' | 'intended';

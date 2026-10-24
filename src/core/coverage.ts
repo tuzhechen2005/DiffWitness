@@ -13,7 +13,7 @@ export interface Branch {
 }
 
 // Same options as the loader so instrumented code differs only by the `__diffwitness_cov__[id] = 1` marks.
-const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 };
+const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true };
 
 /**
  * Re-transpiles the original source with `__diffwitness_cov__[id] = 1` at the start of every branch arm.
