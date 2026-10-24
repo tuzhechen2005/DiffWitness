@@ -1,5 +1,7 @@
 import { Worker } from 'node:worker_threads';
-import type { Args, LoadedFn, Outcome, Runner } from './types';
+import type { Args, LoadedFn, Outcome, Pair, Runner } from './types';
+
+type Reply = { o: Outcome; cov?: number[] };
 
 // Plain CommonJS so `eval: true` works the same under tsx and vitest.
 const WORKER = String.raw`
@@ -8,6 +10,9 @@ const vm = require('node:vm');
 const { fns, timeoutMs } = workerData;
 const NEG0 = '\u0000-0';
 const prelude = new vm.Script('var exports = {}; var module = { exports: exports };');
+// __cov is built inside the context (never a host array); hits leave it as a primitive string.
+const covInit = new vm.Script('var __cov = [];');
+const covRead = new vm.Script('var __r = []; for (var __i = 0; __i < __cov.length; __i++) if (__cov[__i] === 1) __r.push(__i); __r.join()');
 
 function thrown(e) {
   try {
@@ -21,35 +26,49 @@ function thrown(e) {
 
 function call(side, args) {
   const f = fns[side];
+  f.cov ??= f.code.includes('__cov');
+  let ctx, left;
+  const res = (o) => {
+    if (!f.cov || o.kind === 'timeout') return { o };
+    try {
+      const hits = covRead.runInContext(ctx, { timeout: left() });
+      // Never coerce a context object here: its toString would run outside the vm timeout.
+      if (typeof hits !== 'string') return { o };
+      return { o, cov: hits ? hits.split(',').map(Number) : [] };
+    } catch {
+      return { o };
+    }
+  };
   try {
     // Null-prototype sandbox: a host-realm object would let code reach process via constructor.constructor.
     const sandbox = Object.create(null);
     // Args cross as a JSON string so the context only ever sees its own objects; -0 survives via a marker.
     sandbox.__args = JSON.stringify(args, (k, v) => (Object.is(v, -0) ? NEG0 : v));
-    const ctx = vm.createContext(sandbox, { microtaskMode: 'afterEvaluate' });
+    ctx = vm.createContext(sandbox, { microtaskMode: 'afterEvaluate' });
     const end = Date.now() + timeoutMs;
-    const left = () => Math.max(1, end - Date.now());
+    left = () => Math.max(1, end - Date.now());
     prelude.runInContext(ctx);
+    if (f.cov) covInit.runInContext(ctx);
     (f.script ??= new vm.Script(f.code)).runInContext(ctx, { timeout: left() });
     f.call ??= new vm.Script('module.exports[' + JSON.stringify(f.name) + '](...JSON.parse(__args, (k, v) => (v === ' + JSON.stringify(NEG0) + ' ? -0 : v)))');
     const value = f.call.runInContext(ctx, { timeout: left() });
     // shortcut: async functions are rejected (witness() aborts on this name), support them if users need it.
-    if (value !== null && typeof value === 'object' && typeof value.then === 'function') return { kind: 'throw', name: 'DiffWitnessAsync', message: 'returned a Promise' };
-    return { kind: 'return', value };
+    if (value !== null && typeof value === 'object' && typeof value.then === 'function') return res({ kind: 'throw', name: 'DiffWitnessAsync', message: 'returned a Promise' });
+    return res({ kind: 'return', value });
   } catch (e) {
     // vm creates its timeout error inside the context realm, so match it by code, not instanceof.
-    if (e !== null && typeof e === 'object' && e.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') return { kind: 'timeout' };
-    return thrown(e);
+    if (e !== null && typeof e === 'object' && e.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') return { o: { kind: 'timeout' } };
+    return ctx ? res(thrown(e)) : { o: thrown(e) };
   }
 }
 
 process.on('unhandledRejection', () => {});
 parentPort.on('message', ({ side, args }) => {
-  const outcome = call(side, args);
+  const r = call(side, args);
   try {
-    parentPort.postMessage(outcome);
+    parentPort.postMessage(r);
   } catch (e) {
-    parentPort.postMessage({ kind: 'throw', name: 'DiffWitnessUncloneable', message: String(e && e.message) });
+    parentPort.postMessage({ o: { kind: 'throw', name: 'DiffWitnessUncloneable', message: String(e && e.message) }, cov: r.cov });
   }
 });
 `;
@@ -78,17 +97,17 @@ export async function createRunner(
   };
 
   const call = (side: 0 | 1, args: Args) =>
-    new Promise<Outcome>((resolve) => {
+    new Promise<Reply>((resolve) => {
       const w = (worker ??= spawn());
       // Backstop for hangs vm's timeout cannot see (e.g. a getter looping while the result is cloned).
       const timer = setTimeout(() => {
         worker = undefined;
         void w.terminate();
-        resolve({ kind: 'timeout' });
+        resolve({ o: { kind: 'timeout' } });
       }, timeoutMs + 1000);
-      w.once('message', (o: Outcome) => {
+      w.once('message', (r: Reply) => {
         clearTimeout(timer);
-        resolve(o);
+        resolve(r);
       });
       w.postMessage({ side, args });
     });
@@ -96,7 +115,10 @@ export async function createRunner(
   return {
     run(args) {
       // One request in flight at a time, so replies can never be matched to the wrong call.
-      const p = queue.then(async () => ({ old: await call(0, args), new: await call(1, args) }));
+      const p = queue.then(async (): Promise<Pair> => {
+        const [a, b] = [await call(0, args), await call(1, args)];
+        return a.cov || b.cov ? { old: a.o, new: b.o, coverage: { old: a.cov ?? [], new: b.cov ?? [] } } : { old: a.o, new: b.o };
+      });
       queue = p.catch(() => {});
       return p;
     },

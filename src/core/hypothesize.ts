@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { sameOutcome } from './compare';
 import type { Hypothesis, Hypothesizer, LoadedFn, Outcome, ProposeInput } from './types';
 
 /** Replay fixtures are keyed by the exact pair of sources. */
@@ -25,8 +26,13 @@ const show = (v: unknown) => JSON.stringify(v) ?? String(v);
 const showOutcome = (o: Outcome) =>
   o.kind === 'return' ? `returned ${show(o.value)}` : o.kind === 'throw' ? `threw ${o.name}: ${o.message}` : 'timed out';
 
+const ARM: Record<string, string> = {
+  'if-then': 'then-branch', 'if-else': 'else-branch', 'cond-true': 'true arm of ?:', 'cond-false': 'false arm of ?:',
+  'logical-right': 'right side of &&/||/??', case: 'case', default: 'default case', catch: 'catch block',
+};
+
 /** Exported so the exact prompt can be inspected and tuned. */
-export function buildPrompt({ old, new: next, round, previous }: ProposeInput): string {
+export function buildPrompt({ old, new: next, round, previous, uncovered = [] }: ProposeInput): string {
   const lines = [
     `The function \`${next.name}\` was changed. Find inputs where the OLD and NEW versions behave differently.`,
     '',
@@ -47,7 +53,14 @@ export function buildPrompt({ old, new: next, round, previous }: ProposeInput): 
     lines.push('', 'Already tried, with the real results of running both versions:');
     previous.forEach((t, i) =>
       lines.push(`${i + 1}. args ${show(t.hypothesis.args)}: old ${showOutcome(t.pair.old)}; new ${showOutcome(t.pair.new)}`));
-    lines.push('None of these is a silent divergence. Propose NEW inputs where both versions return normally but the values differ.');
+    const silent = previous.some((t) => t.pair.old.kind === 'return' && t.pair.new.kind === 'return' && !sameOutcome(t.pair.old, t.pair.new));
+    if (!silent) lines.push('None of these is a silent divergence. Propose NEW inputs where both versions return normally but the values differ.');
+    if (uncovered.length) {
+      lines.push('', 'These branches were never executed by any input so far:');
+      // shortcut: capped at 20 lines to keep the prompt small; rank by diff proximity if big functions need it.
+      for (const b of uncovered.slice(0, 20)) lines.push(`- ${b.side.toUpperCase()} line ${b.line} \`${b.text}\` (${ARM[b.kind] ?? b.kind})`);
+      lines.push('Propose inputs that reach them and make old and new differ.');
+    }
   }
   return lines.join('\n');
 }

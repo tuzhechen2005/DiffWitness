@@ -22,6 +22,8 @@ export type Outcome =
 export interface Pair {
   old: Outcome;
   new: Outcome;
+  /** Branch ids each side executed; only for instrumented functions (see coverage.ts). */
+  coverage?: { old: number[]; new: number[] };
 }
 
 export interface Runner {
@@ -48,6 +50,8 @@ export interface ProposeInput {
   round: 1 | 2;
   /** Round 2 only: every round-1 trial with its real outcomes. */
   previous: Trial[];
+  /** Round 2 only: branches no input has executed yet. */
+  uncovered?: { side: 'old' | 'new'; line: number; kind: string; text: string }[];
 }
 
 export interface Hypothesizer {
@@ -66,6 +70,8 @@ export interface Divergence {
   /** The model's original args for each merged hypothesis. */
   originalArgs: Args[];
   shrinkSteps: number;
+  /** Divergences with the same outcome kinds and branch paths share a cluster; its simplest repro comes first. */
+  cluster?: number;
 }
 
 export interface BaselineResult {
@@ -86,6 +92,8 @@ export interface WitnessReport {
   divergences: Divergence[];
   /** Naive random fuzzing over the shape of the first hypothesis' args; absent if no hypotheses. */
   baseline?: BaselineResult;
+  /** Branches executed by the model's inputs, out of all instrumented branches. */
+  coverage?: { old: { covered: number; total: number }; new: { covered: number; total: number } };
 }
 
 export type Label = 'bug' | 'intended';

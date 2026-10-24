@@ -43,6 +43,19 @@ describe('render', () => {
     expect(s).toContain('Model:          1 of 2 hypotheses diverged');
   });
 
+  it('groups clustered divergences and shows the coverage line', () => {
+    const d = report().divergences[0];
+    const s = strip(renderReport(report({
+      divergences: [{ ...d, cluster: 0 }, { ...d, args: [' b'], cluster: 0 }, { ...d, args: ['x'], cluster: 1 }],
+      coverage: { old: { covered: 3, total: 4 }, new: { covered: 2, total: 2 } },
+    })));
+    expect(s).toContain('Confirmed divergences: 3 in 2 behaviors');
+    expect(s).toContain('+1 similar (same branches): (" b")');
+    expect(s).toContain('#2  normalizeOrderId("x")');
+    expect(s).not.toContain('#3');
+    expect(s).toContain('Coverage:       old 3/4, new 2/2 branches reached by model inputs');
+  });
+
   it('says no divergence is evidence, not proof', () => {
     const s = strip(renderReport(report({ divergences: [], hypothesizer: 'gemma4:e4b @ http://x' })));
     expect(s).toContain('No divergence found (this is evidence, not proof of equivalence).');
