@@ -42,7 +42,7 @@ ollama pull gemma4:e4b
 npm run diffwitness -- old.ts new.ts
 ```
 
-Each input file must be self-contained and have no imports. By default it must export exactly one named synchronous function (`export function` or an exported arrow/function expression). With `--fn name`, select that exported function in both files; other exports and local helper functions/constants are allowed and the whole file is retained. Supply positional arguments through model hypotheses or replay fixtures. To try a supplied example without Ollama:
+In two-file mode, each input file must be self-contained and have no imports. By default it must export exactly one named synchronous function (`export function` or an exported arrow/function expression). With `--fn name`, select that exported function in both files; other exports and local helper functions/constants are allowed and the whole file is retained. Supply positional arguments through model hypotheses or replay fixtures. To try a supplied example without Ollama:
 
 ```sh
 npm run diffwitness -- examples/order-id/old.ts examples/order-id/new.ts --replay --label bug --out /tmp/x.test.ts
@@ -53,8 +53,10 @@ npm run diffwitness -- examples/order-id/old.ts examples/order-id/new.ts --repla
 | `--label bug` or `--label intended` | Apply one label to all confirmed divergences and export tests. Without this flag, a terminal prompts for bug, intended, or skip; noninteractive runs do not label or export. |
 | `--json` | Print the report as JSON and return before labeling or export. Special numbers and undefined are represented as strings. |
 | `--replay` | Read saved hypotheses instead of calling Ollama. |
-| `--out file` | Output test path; default `diffwitness.test.ts`. Its parent directory must exist. |
-| `--fn name` | Select a named exported function in both files. Local helpers/constants and other exports are allowed; imports remain rejected. |
+| `--out file` | Two-file mode only (rejected with `--git`). Output test path; default `diffwitness.test.ts`. Its parent directory must exist. |
+| `--fn name` | Select a named exported function in two-file mode, or filter changed functions by name in git mode. Local helpers/constants are allowed; two-file mode still rejects imports. |
+| `--git <base>[..<head>]` | Compare modified exported functions against a commit; omitted head means the working tree. Takes no positional file arguments. |
+| `--path file` | Git mode only: restrict selection to one file, resolved relative to the current directory. |
 | `--runs n` | Positive integer random-baseline run count; default 2000. |
 
 | Environment variable | Behavior / default |
@@ -66,6 +68,48 @@ npm run diffwitness -- examples/order-id/old.ts examples/order-id/new.ts --repla
 | `DIFFWITNESS_RECORD` | File to write validated live hypotheses to, keyed by the exact old/new source pair and round. Ignored in replay mode. |
 
 Default replay uses recorded Gemma 4 e4b replies from `fixtures/gemma-recorded.json`. The handwritten `fixtures/replay.json` is used only by tests. Replay requires a readable fixture file; a source pair or round absent from it produces no hypotheses. For development checks, run `npm run typecheck && npm test`; tests use fixtures rather than a real model.
+
+## Use it on a real repo
+
+Run `diffwitness --git <base>[..<head>]` inside the target Git repository. With only a base revision, the head is the current working tree (including tracked, uncommitted changes). With `base..head`, both sides are resolved to commits. For example, invoke a local DiffWitness checkout from your project:
+
+```sh
+node /path/to/DiffWitness/bin/diffwitness.mjs --git HEAD~1
+node /path/to/DiffWitness/bin/diffwitness.mjs --git main..feature
+node /path/to/DiffWitness/bin/diffwitness.mjs --git HEAD~1 --path src/order.ts --fn total --label bug
+```
+
+Both revisions are validated as commits; a revision starting with `-` is rejected. `--path` selects an exact file relative to the current directory, and `--fn` filters by exported function name.
+
+Selection uses modified `.ts` files, excluding declaration, test and spec files and `node_modules`. It compares the own source text of top-level named exported function declarations and exported arrow/function expressions. A function must exist on both sides and have changed text. New or removed functions and default exports are skipped; selection does not follow changes through the call graph.
+
+Each commit is read through a temporary detached worktree, cleaned up afterwards; the working-tree side is used as is. esbuild bundles local imports and pure npm packages, resolving dependencies from the target repository's installed `node_modules`. Install those dependencies first. Node builtins cause a skip with a diagnostic. Prompts use the selected function's own text; reported coverage and uncovered-branch feedback are restricted to its own source lines, rather than dependency branches.
+
+Labeled results are written in the current directory as `diffwitness.<path>.<fn>.test.ts`. The `.ts` suffix is removed from the source path and directory separators become underscores: `src/order.ts:total` produces `diffwitness.src_order.total.test.ts`. `--out` is rejected in git mode. Exported tests import the current repository file, even when comparing two commits; run them with the intended new version checked out.
+
+For a replay-only check of selection and bundling, this command was run on DiffWitness at `febfc6b`:
+
+```sh
+npm run diffwitness -- --git HEAD~5 --replay
+```
+
+Excerpt from its actual output:
+
+```text
+━━ src/core/baseline.ts:randomArgs
+DiffWitness  randomArgs
+```
+
+```text
+Model:          0 of 0 hypotheses diverged, 0 silent, 0 distinct repros
+Coverage:       old 0/12, new 0/21 branches reached by model inputs
+```
+
+```text
+1 changed function(s) checked, 0 with divergences
+```
+
+The run skipped functions pulling in Node builtins and had no replay hypotheses for `randomArgs`. No inputs were executed, so this demonstrates discovery and bundling, not behavioral equivalence. The functions selected by `HEAD~5` will change as history advances. See [the git-mode guide](demo/git-mode.md) for another revision-specific example; omit `--replay` with Ollama running to generate live hypotheses.
 
 ## Sample terminal output
 
@@ -140,7 +184,13 @@ The loader parses and transpiles TypeScript without executing it. `src/core/cove
 
 The hypothesizer receives both original sources and proposes up to eight JSON argument arrays per round. Invalid JSON or a missing hypotheses array causes one retry with the same prompt; a second parse failure logs a warning and yields no hypotheses. Network/HTTP errors throw without retry. Recording stores only successfully parsed responses.
 
+The TypeScript checker extracts parameter types from the new function's source and includes them in the prompt. Before execution, hypotheses that violate a representable declared type are dropped; extra positional arguments are also rejected when a signature is available. `--json` exposes the count as `droppedForType` when nonzero (inside each report in git mode). Primitives, literals, unions, arrays and supported object structures can be checked. Types including `undefined` are treated as optional: JSON represents their absence by omission, not an explicit undefined value.
+
+This is partial type awareness, not full project type checking. Rest parameters disable signature extraction; unsupported types such as `any`, `unknown`, generics and external type declarations may have no checkable shape. Git-mode signature extraction sees the function's own source, not the complete imported type environment. The type filter applies to proposed hypotheses, not shrink candidates.
+
 Each version runs with fresh arguments and branch marks in a fresh VM context inside a worker, with a default one-second execution timeout. The comparator checks return values structurally (`NaN` equals itself, `0` differs from `-0`), compares thrown error names while ignoring messages, and treats two timeouts as equal.
+
+If at least one trial ran and every trial threw the same error name on both sides, the report warns that the function never ran normally instead of saying “No divergence found.” `--json` includes `neverRan` with the first error's name and message. This detects situations such as unavailable globals; it compares error names, not messages, and is not proof that the function body was never entered. Zero hypotheses do not trigger this warning.
 
 A silent divergence means both versions return normally and their values differ. With coverage feedback enabled (the default), round two runs if round one found no silent divergence **or any instrumented branch remains uncovered**. Its prompt includes the real outcomes of previous trials and up to 20 uncovered branch entries, identifying old/new side, original source line, branch kind and source text. A silent divergence alone does not stop the search when branches remain uncovered. Replay uses stored replies rather than asking a model to react to this feedback.
 
@@ -186,11 +236,13 @@ describe('normalizeOrderId (DiffWitness)', () => {
 
 - Execution judges a proposed input. A model's explanation is a lead; a confirmed divergence requires observed outcomes from both versions.
 - JSON-only inputs keep hypotheses serializable, replayable, and easy to shrink. They also allow each execution to receive its own copy without sharing host objects.
-- A seeded naive random baseline gives a simple comparison with uninformed sampling. It infers shapes from the first hypothesis: printable ASCII strings, small integers and floats, short arrays, and objects with the same keys. It is absent when there are no hypotheses and is not a domain-aware fuzzer.
+- A seeded naive random baseline gives a simple comparison with uninformed sampling. It uses type-derived shapes when the new signature has parameters and every parameter is representable; otherwise it infers shapes from the first executed hypothesis. `baseline.shapeFrom` in JSON reports `types` or `example`. Sampling still uses printable ASCII strings, small integers and floats, short arrays, and supported object/literal/union shapes. The baseline is absent when no hypotheses executed and is not a domain-aware fuzzer.
 
 ## Limitations
 
-- Use pure, synchronous, self-contained functions. Promises are rejected; the tool does not model external services, I/O, or shared application state.
+- Use pure, synchronous functions; two-file mode additionally requires self-contained files without imports. Promises are rejected; the tool does not model external services, I/O, or shared application state.
+- Git mode does not select callers when only a helper changes; added, deleted and renamed files are ignored, as are functions present on only one side. Only modified `.ts` files are scanned.
+- Bundling supports pure dependencies, not a Node application runtime: Node builtins and globals such as `process`, `Buffer` and `fetch` are unsupported. Module top-level code re-runs for every call, so initialization failures can prevent the selected function from returning normally. Both revisions use dependencies installed in the current target repository, not separate historical dependency installations.
 - Arguments are JSON-only. Return values must cross the worker boundary via structured cloning. The comparator has no cycle detection; RegExp and Error return values are compared by enumerable properties.
 - Coverage tracks only the constructs listed above, not full language, statement or path coverage. Logical operators mark only right-hand evaluation; branch sets omit execution order and repetition. Unreachable marks can still trigger round two; the prompt lists at most 20 uncovered entries. Timeouts provide no branch hits. Full reported coverage does not prove equivalence or that all bugs were found.
 - VM isolation is not a security sandbox. Use this locally with code you trust, not as a service for running hostile submissions.
@@ -205,6 +257,9 @@ describe('normalizeOrderId (DiffWitness)', () => {
 | `src/cli.ts`, `src/render.ts` | Arguments, terminal/JSON reports, labeling, export path handling. |
 | `src/core/types.ts` | Shared argument, outcome, hypothesis, and report contracts. |
 | `src/core/coverage.ts` | TypeScript branch instrumentation and original source-line metadata. |
+| `src/core/git.ts` | Revision validation and selection of changed exported functions. |
+| `src/core/bundle.ts` | Temporary revision checkouts, esbuild bundling and function-line coverage metadata. |
+| `src/core/signature.ts` | Checker-derived parameter types, representable shapes and hypothesis filtering. |
 | `src/core/loader.ts` | TypeScript parsing, import checks, and transpilation. |
 | `src/core/hypothesize.ts` | Ollama prompts, two-round feedback, recording, and replay. |
 | `src/core/executor.ts`, `src/core/compare.ts` | Worker/VM execution and outcome comparison. |
@@ -220,6 +275,7 @@ describe('normalizeOrderId (DiffWitness)', () => {
 | `bench/real/` | Three adapted query-string fixes with source evidence and licenses. |
 | `bench/experiments/` | Planned destination for experiment results; create it before writing there. |
 | `demo/` | VHS tape, regeneration instructions and terminal GIF. |
+| `demo/git-mode.md` | Git-mode usage and revision-specific replay demonstration. |
 | `scripts/bench.ts` | Live hypothesis and seeded random-baseline benchmark runner. |
 | `tests/` | Automated tests. |
 | `scripts/cloud-setup.sh` | Noninteractive dependency installation. |
@@ -234,7 +290,7 @@ With Ollama running and `gemma4:e4b` available, run from the repository root wit
 npx tsx scripts/bench.ts --runs-per-case 3 --random 2000
 ```
 
-The script prints a Markdown table and writes `bench/results.md`. It reports the fraction of model runs finding a silent divergence, silent hits among 2000 random inputs per case, and average witness runtime. The random baseline uses seed 1 and infers input shapes from the planted failing input; this gives random sampling useful information and favors random. Replay runs validate the script but do not measure live model performance.
+The script prints a Markdown table and writes `bench/results.md`. It reports the fraction of model runs finding a silent divergence, silent hits among 2000 random inputs per case, and average witness runtime. The random baseline uses seed 1 and now derives shapes from declared parameter types when all parameters are representable, falling back to the planted input otherwise. Generated benchmark reports state how many cases use declared types. The benchmark random-hit counts did not change versus example-derived shapes; the existing result tables are retained unchanged. Replay runs validate the script but do not measure live model performance.
 
 Additional corpora:
 
@@ -271,14 +327,14 @@ Live results, `gemma4:e4b` on an RTX 4060 laptop over LAN, 3 runs per case, 2000
 
 Caveats:
 - A hit means the model found *a* silent divergence. Each case changes only one behavior, so in practice this is the planted bug, but the script does not check that it is exactly the planted input.
-- The random baseline gets the shape of the planted input, which helps it.
+- The original random baseline got the planted input's shape, which helped it. Type-derived shapes now remove that advantage for representable signatures; the benchmark random-hit counts did not change. Unsupported signatures still fall back to the planted input, as recorded in new reports.
 - Timing covers the whole pipeline: model call, execution and shrinking.
 - In one of the 30 runs the model returned malformed JSON. DiffWitness dropped that reply and found the bug in the next round, which is why model output is validated before use.
 - 3 runs per case is a small sample. On the order-id example, the model found the leading-zero case in 3 of 5 live runs; it found other silent divergences in all 5.
 
 ## Tech and models used
 
-TypeScript supplies the implementation and transpiler. Node.js `worker_threads` and `vm` run comparisons. Gemma 4 e4b (`gemma4:e4b`) is the default live model, served through Ollama's chat API with a JSON response schema. Vitest runs the tests and is the format of exported regressions; `tsx` runs the CLI, and `picocolors` formats terminal output.
+TypeScript supplies the implementation, checker and transpiler; esbuild bundles git-mode imports. Node.js `worker_threads` and `vm` run comparisons. Gemma 4 e4b (`gemma4:e4b`) is the default live model, served through Ollama's chat API with a JSON response schema. Vitest runs the tests and is the format of exported regressions; `tsx` runs the CLI, and `picocolors` formats terminal output.
 
 ## Built at MadCloud x MLH Hacktoberfest Hack Day 2026
 
