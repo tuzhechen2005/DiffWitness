@@ -1,6 +1,25 @@
 # DiffWitness
 
-<!-- PITCH: integrator writes this -->
+**Your refactor passed every test. It also turned order `00128` into `128`.**
+
+DiffWitness checks whether two versions of a pure TypeScript function still behave the same. A local open-weight model (Gemma 4 e4b, via Ollama) reads both versions and proposes inputs where they might differ. DiffWitness then runs both versions on every proposed input. Execution decides whether a difference is real; the model's opinion does not. Each real difference is shrunk to a minimal repro, you label it *bug* or *intended*, and DiffWitness writes a vitest regression file.
+
+```text
+  #1  normalizeOrderId("00")
+      old → "00"
+      new → "0"
+      model args: ("00128")
+
+Random fuzzing: 477 of 2000 runs diverged, 32 silent (both returned); sample shrank to 18 distinct repros
+Model:          7 of 8 hypotheses diverged, 2 silent, 5 distinct repros
+  random repros: ("N") ("9/") ("-") ("6=") ("T") ("e") ("X") ("W") ("1T") ("5:") …
+  model repros:  ("O") ("A") ("1A") ("00") ("1.")
+```
+
+- **The model proposes; execution decides.** Every reported difference comes from actually running both versions. A wrong guess from the model is dropped and never reported.
+- **It targets silent bugs.** These are inputs where both versions return normally but with different values, which no exception or type check will catch. If round one finds none, round two sends the real outcomes back to the model and asks again.
+- **It runs locally.** The model runs on your own machine or LAN, so your code is not uploaded anywhere.
+- **It checks against a baseline.** On 10 refactors with a planted silent bug, a 4B-parameter model found the bug in 30 of 30 runs. Random fuzzing found it 0 times in 3 of those cases, even with 2000 tries and the exact input shape. See [Benchmark](#benchmark).
 
 ## Quick start
 
@@ -52,7 +71,7 @@ The command above produced this output with colors disabled. These replay result
 > tsx src/cli.ts examples/order-id/old.ts examples/order-id/new.ts --replay --label bug --out /tmp/x.test.ts
 
 DiffWitness  normalizeOrderId
-  hypothesizer:  REPLAY  replay (/workspace/DiffWitness-issue-20/fixtures/gemma-recorded.json)
+  hypothesizer:  REPLAY  replay (/path/to/DiffWitness/fixtures/gemma-recorded.json)
   rounds used:  1
 
 Hypotheses
@@ -206,7 +225,27 @@ npx tsx scripts/bench.ts --runs-per-case 3 --random 2000
 
 The script prints a Markdown table and writes `bench/results.md`. It reports the fraction of model runs finding a silent divergence, silent hits among 2000 random inputs per case, and average witness runtime. The random baseline uses seed 1 and infers input shapes from the planted failing input; this gives random sampling useful information and favors random. Replay runs validate the script but do not measure live model performance.
 
-<!-- RESULTS: integrator fills benchmark numbers -->
+Live results, `gemma4:e4b` on an RTX 4060 laptop over LAN, 3 runs per case, 2000 random inputs per case (from [`bench/results.md`](bench/results.md)):
+
+| case | planted bug | model silent hit rate | random silent hits / 2000 | model avg s |
+| --- | --- | --- | --- | --- |
+| access-rule | dropped parentheses in `a \|\| b && !c` | 3/3 | 479 | 19.4 |
+| dedupe-order | added `.sort()` to unique tags | 3/3 | 1119 | 15.7 |
+| discount-cents | rounds the total instead of the discount | 3/3 | 1009 | 40.3 |
+| free-shipping | `>=` became `>` at the threshold | 3/3 | **0** | 10.6 |
+| iso-date | UTC conversion shifts the calendar date | 3/3 | 71 | 22.5 |
+| option-default | `??` became `\|\|`, so `retries: 0` becomes 3 | 3/3 | **0** | 14.8 |
+| page-offset | `(page - 1) * size` became `page * size` | 3/3 | 1 | 19.7 |
+| phone-prefix | `String(Number(digits))` drops a leading zero | 3/3 | 1224 | 15.9 |
+| query-value | `split("=")[1]` truncates values containing `=` | 3/3 | 2 | 16.4 |
+| unicode-slug | dropped diacritic folding, `café` → `caf-` | 3/3 | **0** | 18.4 |
+
+Caveats:
+- A hit means the model found *a* silent divergence. Each case changes only one behavior, so in practice this is the planted bug, but the script does not check that it is exactly the planted input.
+- The random baseline gets the shape of the planted input, which helps it.
+- Timing covers the whole pipeline: model call, execution and shrinking.
+- In one of the 30 runs the model returned malformed JSON. DiffWitness dropped that reply and found the bug in the next round, which is why model output is validated before use.
+- 3 runs per case is a small sample. On the order-id example, the model found the leading-zero case in 3 of 5 live runs; it found other silent divergences in all 5.
 
 ## Tech and models used
 
