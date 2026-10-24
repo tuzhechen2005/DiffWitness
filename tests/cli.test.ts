@@ -63,6 +63,11 @@ describe('render', () => {
 });
 
 describe('parseCli', () => {
+  it('parses an optional named function', () => {
+    expect(parseCli(['a.ts', 'b.ts', '--fn', 'selected']).fn).toBe('selected');
+    expect(parseCli(['a.ts', 'b.ts']).fn).toBeUndefined();
+  });
+
   it('parses flags and applies defaults', () => {
     expect(parseCli(['a.ts', 'b.ts', '--label', 'bug', '--runs', '50', '--replay'])).toMatchObject({
       oldFile: 'a.ts', newFile: 'b.ts', label: 'bug', runs: 50, replay: true, json: false, out: 'diffwitness.test.ts',

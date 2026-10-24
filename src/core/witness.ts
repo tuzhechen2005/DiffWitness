@@ -8,6 +8,7 @@ import type { Args, BaselineResult, Divergence, Hypothesizer, Pair, Runner, Tria
 export interface WitnessOptions {
   oldFile: string;
   newFile: string;
+  fn?: string;
   hypothesizer: Hypothesizer;
   timeoutMs?: number;
   baselineRuns?: number;
@@ -18,7 +19,7 @@ const diverges = (p: Pair) => !sameOutcome(p.old, p.new);
 const kinds = (p: Pair) => `${p.old.kind}/${p.new.kind}`;
 
 export async function witness(o: WitnessOptions): Promise<WitnessReport> {
-  const [oldFn, newFn] = await Promise.all([loadFunction(o.oldFile), loadFunction(o.newFile)]);
+  const [oldFn, newFn] = await Promise.all([loadFunction(o.oldFile, o.fn), loadFunction(o.newFile, o.fn)]);
   const runner = await createRunner(oldFn, newFn, { timeoutMs: o.timeoutMs ?? 1000 });
   try {
     const trials: Trial[] = [];
