@@ -12,12 +12,12 @@ export interface Branch {
   text: string;
 }
 
-// Same options as the loader so instrumented code differs only by the `__cov[id] = 1` marks.
+// Same options as the loader so instrumented code differs only by the `__diffwitness_cov__[id] = 1` marks.
 const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 };
 
 /**
- * Re-transpiles the original source with `__cov[id] = 1` at the start of every branch arm.
- * The executor provides a fresh `__cov` array per call when the code mentions it.
+ * Re-transpiles the original source with `__diffwitness_cov__[id] = 1` at the start of every branch arm.
+ * The executor provides a fresh `__diffwitness_cov__` array per call when the code mentions it.
  */
 // shortcut: no marks for `?.`, `&&=`/`||=`/`??=`, default parameters or loops; add them if users ask for loop coverage.
 export function instrument(fn: LoadedFn): { fn: LoadedFn; branches: Branch[] } {
@@ -29,7 +29,7 @@ export function instrument(fn: LoadedFn): { fn: LoadedFn; branches: Branch[] } {
     const mark = (at: ts.Node, kind: BranchKind) => {
       const line = sf.getLineAndCharacterOfPosition(at.getStart(sf)).line;
       branches.push({ id: branches.length, line: line + 1, kind, text: lines[line].trim() });
-      const cell = f.createElementAccessExpression(f.createIdentifier('__cov'), branches.length - 1);
+      const cell = f.createElementAccessExpression(f.createIdentifier('__diffwitness_cov__'), branches.length - 1);
       return f.createAssignment(cell, f.createNumericLiteral(1));
     };
     const markStmt = (at: ts.Node, kind: BranchKind) => f.createExpressionStatement(mark(at, kind));

@@ -10,9 +10,9 @@ const vm = require('node:vm');
 const { fns, timeoutMs } = workerData;
 const NEG0 = '\u0000-0';
 const prelude = new vm.Script('var exports = {}; var module = { exports: exports };');
-// __cov is built inside the context (never a host array); hits leave it as a primitive string.
-const covInit = new vm.Script('var __cov = [];');
-const covRead = new vm.Script('var __r = []; for (var __i = 0; __i < __cov.length; __i++) if (__cov[__i] === 1) __r.push(__i); __r.join()');
+// __diffwitness_cov__ is built inside the context (never a host array); hits leave it as a primitive string.
+const covInit = new vm.Script('var __diffwitness_cov__ = [];');
+const covRead = new vm.Script('var __r = []; for (var __i = 0; __i < __diffwitness_cov__.length; __i++) if (__diffwitness_cov__[__i] === 1) __r.push(__i); __r.join()');
 
 function thrown(e) {
   try {
@@ -26,7 +26,7 @@ function thrown(e) {
 
 function call(side, args) {
   const f = fns[side];
-  f.cov ??= f.code.includes('__cov');
+  f.cov ??= f.code.includes('__diffwitness_cov__');
   let ctx, left;
   const res = (o) => {
     if (!f.cov || o.kind === 'timeout') return { o };

@@ -72,11 +72,14 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
 
     const first = trials[0]?.hypothesis.args;
     const baseline = first && (await runBaseline(runner, first, o.baselineRuns ?? 2000, o.seed ?? 1));
+    const found = [...byArgs.values()];
+    // Without branches every divergence shares the empty path, so grouping would say nothing.
+    const divergences = oldCov.branches.length + newCov.branches.length ? cluster(found) : found;
     const coverage = {
       old: { covered: hit.old.size, total: oldCov.branches.length },
       new: { covered: hit.new.size, total: newCov.branches.length },
     };
-    return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences: cluster([...byArgs.values()]), baseline, coverage };
+    return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences, baseline, coverage };
   } finally {
     await runner.close();
   }

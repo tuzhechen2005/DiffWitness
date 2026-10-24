@@ -26,6 +26,8 @@ describe('witness with replay fixtures', () => {
           }),
         ]));
       } else if (example === 'rounding') {
+        // No branches in either version: nothing to group by, so no clusters.
+        expect(report.divergences.every((d) => d.cluster === undefined)).toBe(true);
         expect(report.divergences.map(({ args }) => args)).toEqual(
           expect.arrayContaining([[-0.125], [2.675]]),
         );

@@ -52,14 +52,16 @@ export function renderReport(r: WitnessReport): string {
       if (last && d.cluster !== undefined && last[0].cluster === d.cluster) last.push(d);
       else groups.push([d]);
     }
-    out.push(pc.bold(pc.red(`Confirmed divergences: ${r.divergences.length} in ${groups.length} behavior${groups.length === 1 ? '' : 's'}`)));
+    const paths = r.divergences.some((d) => d.cluster !== undefined) ? ` in ${groups.length} branch path${groups.length === 1 ? '' : 's'}` : '';
+    out.push(pc.bold(pc.red(`Confirmed divergences: ${r.divergences.length}${paths}`)));
     groups.forEach(([d, ...similar], i) => {
       out.push('', pc.bold(pc.red(`  #${i + 1}  ${r.fnName}${fmtArgs(d.args)}`)));
       out.push(`      old → ${fmtOutcome(d.pair.old)}`, `      new → ${fmtOutcome(d.pair.new)}`);
       const orig = d.originalArgs.map(fmtArgs).filter((a) => a !== fmtArgs(d.args));
       if (orig.length) out.push(pc.dim(`      model args: ${orig.join(' | ')}`));
       out.push(pc.dim(`      shrunk in ${d.shrinkSteps} steps; why: ${d.reasons.join(' / ')}`));
-      if (similar.length) out.push(pc.dim(`      +${similar.length} similar (same branches): ${similar.map((x) => fmtArgs(x.args)).join(' ')}`));
+      if (similar.length) out.push(pc.dim(`      +${similar.length} more on the same branch path (may still be different bugs):`));
+      for (const x of similar) out.push(pc.dim(`        ${fmtArgs(x.args)}  old → ${fmtOutcome(x.pair.old)}  new → ${fmtOutcome(x.pair.new)}`));
     });
   }
 

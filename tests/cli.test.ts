@@ -49,10 +49,12 @@ describe('render', () => {
       divergences: [{ ...d, cluster: 0 }, { ...d, args: [' b'], cluster: 0 }, { ...d, args: ['x'], cluster: 1 }],
       coverage: { old: { covered: 3, total: 4 }, new: { covered: 2, total: 2 } },
     })));
-    expect(s).toContain('Confirmed divergences: 3 in 2 behaviors');
-    expect(s).toContain('+1 similar (same branches): (" b")');
+    expect(s).toContain('Confirmed divergences: 3 in 2 branch paths');
+    expect(s).toContain('+1 more on the same branch path (may still be different bugs):');
+    expect(s).toContain('(" b")  old → "A"  new → throws TypeError: bad');
     expect(s).toContain('#2  normalizeOrderId("x")');
     expect(s).not.toContain('#3');
+    expect(strip(renderReport(report()))).toContain('Confirmed divergences: 1\n');
     expect(s).toContain('Coverage:       old 3/4, new 2/2 branches reached by model inputs');
   });
 
