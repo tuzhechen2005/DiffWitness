@@ -1,0 +1,175 @@
+{
+  "767812fd55d84899": {
+    "source": "model",
+    "rounds": {
+      "1": [
+        {
+          "reason": "Tests the standard halfway rounding boundary (X.XX5), where the mathematical approach and string formatting might diverge due to precision.",
+          "args": [
+            0.005
+          ]
+        },
+        {
+          "reason": "Tests a value slightly below the halfway point, checking if floating point inaccuracies cause the OLD function to incorrectly round up.",
+          "args": [
+            0.004999999999999
+          ]
+        },
+        {
+          "reason": "Tests a value slightly above the halfway point, ensuring both methods correctly round up.",
+          "args": [
+            0.005000000000001
+          ]
+        },
+        {
+          "reason": "Tests negative numbers at the halfway boundary, ensuring consistent rounding direction.",
+          "args": [
+            -0.005
+          ]
+        },
+        {
+          "reason": "Tests a large number at the halfway boundary, checking if precision issues persist with magnitude.",
+          "args": [
+            12345.675
+          ]
+        },
+        {
+          "reason": "Tests a number that is the result of a known floating-point error (0.1 + 0.2), ensuring the rounding handles the resulting imprecision.",
+          "args": [
+            0.3
+          ]
+        },
+        {
+          "reason": "Tests a value that is exactly zero, ensuring no unexpected behavior occurs.",
+          "args": [
+            0
+          ]
+        },
+        {
+          "reason": "Tests a value that is exactly one, ensuring the rounding mechanism is stable for integers.",
+          "args": [
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "fbec7d72672fe8a9": {
+    "source": "model",
+    "rounds": {
+      "1": [
+        {
+          "reason": "This input tests the interaction between leading/trailing whitespace and mixed casing, which is the only scenario where the order of operations could theoretically matter.",
+          "args": [
+            "  HeLLo@ExAmPlE.com  "
+          ]
+        }
+      ],
+      "2": [
+        {
+          "reason": "Tests if the trimming operation is affected by the case change when the string is entirely whitespace.",
+          "args": [
+            " \t\n "
+          ]
+        },
+        {
+          "reason": "Tests if the trimming operation correctly handles mixed leading/trailing whitespace and case.",
+          "args": [
+            "  HeLLo@ExAmPlE.com  "
+          ]
+        },
+        {
+          "reason": "Tests if the order matters when the string contains only punctuation and whitespace.",
+          "args": [
+            " . , \t "
+          ]
+        },
+        {
+          "reason": "Tests the behavior of an empty string input.",
+          "args": [
+            ""
+          ]
+        },
+        {
+          "reason": "Tests a string with mixed case and internal whitespace, ensuring trimming only affects ends.",
+          "args": [
+            "  a B c  "
+          ]
+        },
+        {
+          "reason": "Tests a string where the case change happens before the trim, focusing on the new implementation's order.",
+          "args": [
+            "\tTEST\n"
+          ]
+        },
+        {
+          "reason": "Tests a string containing only non-alphabetic characters (numbers and symbols) with surrounding whitespace.",
+          "args": [
+            " 123!@# "
+          ]
+        },
+        {
+          "reason": "Tests a string with leading/trailing characters that are case-sensitive but not letters (e.g., Unicode symbols).",
+          "args": [
+            " 🚀EMAIL🚀 "
+          ]
+        }
+      ]
+    }
+  },
+  "f9a33c476cb6b498": {
+    "source": "model",
+    "rounds": {
+      "1": [
+        {
+          "reason": "OLD accepts alphanumeric IDs, while NEW requires the input to be parsable as a pure integer.",
+          "args": [
+            "ORD-123"
+          ]
+        },
+        {
+          "reason": "OLD accepts IDs containing letters, while NEW fails because the string does not start with a digit.",
+          "args": [
+            "A123"
+          ]
+        },
+        {
+          "reason": "OLD accepts IDs containing letters and hyphens, which NEW rejects as non-numeric.",
+          "args": [
+            "ABC-XYZ"
+          ]
+        },
+        {
+          "reason": "SILENT DIVERGENCE: OLD accepts the full string, but NEW truncates the string at the first non-digit character.",
+          "args": [
+            "123A45"
+          ]
+        },
+        {
+          "reason": "SILENT DIVERGENCE: OLD preserves leading zeros, but NEW (via parseInt) strips them.",
+          "args": [
+            "00123"
+          ]
+        },
+        {
+          "reason": "OLD accepts IDs containing hyphens, but NEW fails because the hyphen is not a valid starting character for parseInt.",
+          "args": [
+            "-123"
+          ]
+        },
+        {
+          "reason": "OLD accepts purely alphabetic IDs, but NEW fails because it cannot parse letters as a number.",
+          "args": [
+            "ORDER"
+          ]
+        },
+        {
+          "reason": "OLD accepts IDs containing punctuation (if it's a hyphen), but NEW fails if the punctuation is not a digit or sign.",
+          "args": [
+            "123.45"
+          ]
+        }
+      ]
+    }
+  }
+}
