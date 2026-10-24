@@ -1,0 +1,7 @@
+{
+  "silent": [
+    "9007199254740992",
+    "9007199254740993"
+  ],
+  "note": "Adjacent integer sequence IDs beyond the safe integer range collapse to the same number."
+}

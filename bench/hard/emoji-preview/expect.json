@@ -1,0 +1,6 @@
+{
+  "silent": [
+    "abc😀z"
+  ],
+  "note": "The four-character preview splits an emoji surrogate pair."
+}

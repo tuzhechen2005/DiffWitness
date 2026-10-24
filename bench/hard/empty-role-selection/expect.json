@@ -1,0 +1,7 @@
+{
+  "silent": [
+    [],
+    "all"
+  ],
+  "note": "The empty-list fast path suppresses the default reader role for the all scope."
+}

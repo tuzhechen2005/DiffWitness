@@ -1,0 +1,7 @@
+{
+  "silent": [
+    "straße",
+    "STRASSE"
+  ],
+  "note": "Lowercasing loses the uppercase expansion that made sharp-s match SS."
+}
