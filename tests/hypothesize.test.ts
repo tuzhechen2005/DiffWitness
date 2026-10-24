@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fixtureKey, hypothesizerFromEnv, ollamaHypothesizer, replayHypothesizer } from '../src/core/hypothesize';
+import { buildPrompt, fixtureKey, hypothesizerFromEnv, ollamaHypothesizer, replayHypothesizer } from '../src/core/hypothesize';
 import type { LoadedFn, ProposeInput } from '../src/core/types';
 
 const load = (f: string): LoadedFn => ({ name: 'normalizeOrderId', source: readFileSync(f, 'utf8'), code: '' });
@@ -99,6 +99,23 @@ describe('ollama', () => {
     expect(prompt).toContain('returned "A"');
     expect(prompt).toContain('threw TypeError: boom');
     expect(prompt).toContain('real results');
+  });
+
+  it('round 2 prompt lists uncovered branches and drops the no-silent line once one is found', () => {
+    const silent = {
+      hypothesis: { reason: 'r', args: ['00'], round: 1 as const },
+      pair: { old: { kind: 'return' as const, value: '00' }, new: { kind: 'return' as const, value: '0' } },
+    };
+    const prompt = buildPrompt({
+      ...input, round: 2, previous: [silent],
+      uncovered: [{ side: 'new', line: 4, kind: 'if-then', text: 'if (Number.isNaN(n)) throw new Error(`invalid order id: ${raw}`);' }],
+    });
+    expect(prompt).toContain('These branches were never executed by any input so far:');
+    expect(prompt).toContain('- NEW line 4 `if (Number.isNaN(n)) throw new Error(`invalid order id: ${raw}`);` (then-branch)');
+    expect(prompt).toContain('Propose inputs that reach them and make old and new differ.');
+    expect(prompt).toContain('returned "00"');
+    expect(prompt).not.toContain('None of these is a silent divergence');
+    expect(buildPrompt({ ...input, round: 1, uncovered: [{ side: 'old', line: 1, kind: 'case', text: 'x' }] })).not.toContain('never executed');
   });
 
   it('non-200 and network errors name the URL and model and suggest --replay', async () => {

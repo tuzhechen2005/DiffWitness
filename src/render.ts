@@ -45,13 +45,23 @@ export function renderReport(r: WitnessReport): string {
   if (r.divergences.length === 0) {
     out.push(pc.green('No divergence found (this is evidence, not proof of equivalence).'));
   } else {
-    out.push(pc.bold(pc.red(`Confirmed divergences: ${r.divergences.length}`)));
-    r.divergences.forEach((d, i) => {
+    // witness() orders each cluster's simplest repro first; a divergence without a cluster stands alone.
+    const groups: (typeof r.divergences)[] = [];
+    for (const d of r.divergences) {
+      const last = groups.at(-1);
+      if (last && d.cluster !== undefined && last[0].cluster === d.cluster) last.push(d);
+      else groups.push([d]);
+    }
+    const paths = r.divergences.some((d) => d.cluster !== undefined) ? ` in ${groups.length} branch path${groups.length === 1 ? '' : 's'}` : '';
+    out.push(pc.bold(pc.red(`Confirmed divergences: ${r.divergences.length}${paths}`)));
+    groups.forEach(([d, ...similar], i) => {
       out.push('', pc.bold(pc.red(`  #${i + 1}  ${r.fnName}${fmtArgs(d.args)}`)));
       out.push(`      old → ${fmtOutcome(d.pair.old)}`, `      new → ${fmtOutcome(d.pair.new)}`);
       const orig = d.originalArgs.map(fmtArgs).filter((a) => a !== fmtArgs(d.args));
       if (orig.length) out.push(pc.dim(`      model args: ${orig.join(' | ')}`));
       out.push(pc.dim(`      shrunk in ${d.shrinkSteps} steps; why: ${d.reasons.join(' / ')}`));
+      if (similar.length) out.push(pc.dim(`      +${similar.length} more on the same branch path (may still be different bugs):`));
+      for (const x of similar) out.push(pc.dim(`        ${fmtArgs(x.args)}  old → ${fmtOutcome(x.pair.old)}  new → ${fmtOutcome(x.pair.new)}`));
     });
   }
 
@@ -62,6 +72,10 @@ export function renderReport(r: WitnessReport): string {
     out.push(`Random fuzzing: ${pc.bold(`${b.divergent} of ${b.runs}`)} runs diverged, ${pc.bold(String(b.silent))} silent (both returned); sample shrank to ${b.repros.length} distinct repros`);
   }
   out.push(`Model:          ${pc.bold(pc.green(`${hits} of ${r.trials.length}`))} hypotheses diverged, ${pc.bold(pc.green(String(silent)))} silent, ${r.divergences.length} distinct repros`);
+  if (r.coverage && r.coverage.old.total + r.coverage.new.total > 0) {
+    const c = r.coverage;
+    out.push(`Coverage:       old ${c.old.covered}/${c.old.total}, new ${c.new.covered}/${c.new.total} branches reached by model inputs`);
+  }
   // Show both sets side by side instead of claiming exclusivity: exact-match comparison would overstate it.
   if (r.baseline?.repros.length) out.push(pc.dim(`  random repros: ${r.baseline.repros.slice(0, 10).map(fmtArgs).join(' ')}${r.baseline.repros.length > 10 ? ' …' : ''}`));
   if (r.divergences.length) out.push(`  model repros:  ${r.divergences.map((d) => fmtArgs(d.args)).join(' ')}`);
