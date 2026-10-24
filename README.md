@@ -19,7 +19,7 @@ Model:          7 of 8 hypotheses diverged, 2 silent, 5 distinct repros
 - **The model proposes; execution decides.** Every reported difference comes from actually running both versions. A wrong guess from the model is dropped and never reported.
 - **It targets silent bugs.** These are inputs where both versions return normally but with different values, which no exception or type check will catch. If round one finds none, round two sends the real outcomes back to the model and asks again.
 - **It runs locally.** The model runs on your own machine or LAN, so your code is not uploaded anywhere.
-- **It checks against a baseline.** On 10 refactors with a planted silent bug, a 4B-parameter model found the bug in 30 of 30 runs. Random fuzzing found it 0 times in 3 of those cases, even with 2000 tries and the exact input shape. See [Benchmark](#benchmark).
+- **It checks against a baseline.** On 10 refactors with a planted silent bug, a small local model (Gemma 4 e4b, "effective 4B") found the bug in 30 of 30 runs. Random fuzzing found it 0 times in 3 of those cases, even with 2000 tries and the exact input shape. See [Benchmark](#benchmark).
 
 ## Quick start
 
