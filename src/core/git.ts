@@ -45,20 +45,23 @@ export function resolveRev(repo: string, rev: string): string {
   }
 }
 
+/** Pass as `head` to compare against the staged index instead of a commit or the working tree. */
+export const STAGED = ':staged';
+
 /**
- * Exported functions whose own text changed between `base` and `head` (undefined = working tree).
+ * Exported functions whose own text changed between `base` and `head` (undefined = working tree, STAGED = index).
  * `base` and `head` must be resolved with resolveRev. Functions only on one side, and default exports, are skipped and reported in `notes`.
  */
 export function changedFunctions(repo: string, base: string, head?: string, filter: { path?: string; fn?: string } = {}) {
   const notes: string[] = [];
-  const files = git(repo, 'diff', '--name-only', '--diff-filter=M', base, ...(head ? [head] : []), '--', '*.ts')
+  const files = git(repo, 'diff', '--name-only', '--diff-filter=M', ...(head === STAGED ? ['--cached'] : []), base, ...(head && head !== STAGED ? [head] : []), '--', '*.ts')
     .split('\n')
     .filter((p) => p && !/\.(d|test|spec)\.ts$/.test(p) && !p.split('/').includes('node_modules'))
     .filter((p) => filter.path === undefined || p === filter.path);
   const fns: ChangedFn[] = [];
   for (const path of files) {
     const oldText = git(repo, 'show', `${base}:${path}`);
-    const newText = head ? git(repo, 'show', `${head}:${path}`) : readFileSync(join(repo, path), 'utf8');
+    const newText = head === STAGED ? git(repo, 'show', `:${path}`) : head ? git(repo, 'show', `${head}:${path}`) : readFileSync(join(repo, path), 'utf8');
     const [o, n] = [exportedFunctions(oldText, path), exportedFunctions(newText, path)];
     const [olds, news] = [o.fns, n.fns];
     if (n.hasDefault) notes.push(`${path}: default export skipped; only named exports are checked`);
