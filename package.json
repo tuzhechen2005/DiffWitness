@@ -1,7 +1,7 @@
 {
   "name": "diffwitness",
   "version": "0.1.0",
-  "description": "Let a local open-weight model hunt for inputs where your refactor changed behavior, then prove it by running both versions.",
+  "description": "Let a local open-weight model hunt for inputs where your refactor changed behavior, then confirm it by running both versions.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {

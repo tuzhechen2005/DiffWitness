@@ -17,9 +17,9 @@ What happens:
    but whose own text did not is not selected.
 3. Each commit is checked out in a temporary `git worktree` (removed afterwards; the working tree is used
    as is), and the file is bundled with esbuild so relative imports and `node_modules` packages resolve.
-   Code that pulls in Node builtins (`fs`, `path`, ...) is skipped with a message: the sandbox has no `require`.
+   Code that pulls in Node builtins (`fs`, `path`, ...) is skipped with a message: the VM context has no `require`.
 4. Each function goes through the normal pipeline; labeled divergences are exported to
-   `diffwitness.<fn>.test.ts` in the current directory.
+   `diffwitness.<path>.<fn>.test.ts` in the current directory.
 
 Try it on DiffWitness itself. Replay has no fixtures for these functions, so there are no hypotheses; this
 shows detection and bundling. Drop `--replay` with Ollama running to hunt for real:

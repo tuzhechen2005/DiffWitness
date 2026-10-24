@@ -17,11 +17,16 @@ bug / intended, and export a vitest regression file.
 | `src/core/hypothesize.ts` (+ optional `src/core/ollama.ts`) | #4 |
 | `src/core/exportTests.ts` | #5 |
 | `src/cli.ts`, `src/render.ts` | #6 |
+| `src/core/coverage.ts` | #28 (branch instrumentation) |
+| `src/core/git.ts`, `src/core/bundle.ts` | #37 (git mode, esbuild bundling) |
+| `src/core/signature.ts` | #38 (parameter types) |
+| `src/hook.ts` | #44 (pre-commit hook) |
+| `bench/`, `scripts/bench.ts`, `scripts/dogfood.ts` | benchmarks |
 | `tests/<module>.test.ts` | the issue that owns the module |
 
 Touch only the files your issue owns plus its test file. Keep the exported signatures exactly as
 stubbed. Do not add dependencies; the installed ones are `typescript` (5.9, for transpiling),
-`picocolors`, `vitest`, `tsx`, `@types/node`.
+`picocolors`, `esbuild`, `vitest`, `tsx`, `@types/node`.
 
 ## Setup and commands
 

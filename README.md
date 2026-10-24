@@ -1,6 +1,6 @@
 # DiffWitness
 
-**Your refactor passed every test. It also turned order `00128` into `128`.**
+**Your refactor passed every test. It also turned order `00123` into `123`.**
 
 ![DiffWitness finding the leading-zero bug, exporting failing regression tests, then checking a rounding refactor](demo/demo.gif)
 
@@ -9,21 +9,25 @@
 DiffWitness checks whether two versions of a pure TypeScript function still behave the same. A local open-weight model (Gemma 4 e4b, via Ollama) reads both versions and proposes inputs where they might differ. DiffWitness then runs both versions on every proposed input. Execution decides whether a difference is real; the model's opinion does not. Each real difference is shrunk to a minimal repro, you label it *bug* or *intended*, and DiffWitness writes a vitest regression file.
 
 ```text
-  #1  normalizeOrderId("00")
+  #2  normalizeOrderId("00")
       old → "00"
       new → "0"
-      model args: ("00128")
+      model args: ("00123")
+      shrunk in 6 steps; why: SILENT DIVERGENCE: OLD preserves leading zeros, but NEW (via parseInt) strips them.
 
 Random fuzzing: 477 of 2000 runs diverged, 32 silent (both returned); sample shrank to 18 distinct repros
 Model:          7 of 8 hypotheses diverged, 2 silent, 5 distinct repros
+Coverage:       old 2/2, new 2/2 branches reached by model inputs
   random repros: ("N") ("9/") ("-") ("6=") ("T") ("e") ("X") ("W") ("1T") ("5:") …
-  model repros:  ("O") ("A") ("1A") ("00") ("1.")
+  model repros:  ("A") ("O") ("00") ("1A") ("1.")
 ```
 
+<sub>Excerpt from `npm run diffwitness -- examples/order-id/old.ts examples/order-id/new.ts --replay` (recorded gemma4:e4b replies).</sub>
+
 - **The model proposes; execution decides.** Every reported difference comes from actually running both versions. A wrong guess from the model is dropped and never reported.
-- **It targets silent bugs.** These are inputs where both versions return normally but with different values, which no exception or type check will catch. If round one finds none, round two sends the real outcomes back to the model and asks again.
+- **It targets silent bugs.** These are inputs where both versions return normally but with different values, which no exception or type check will catch. If round one finds none, or leaves branches unexecuted, round two sends the real outcomes and the unreached source lines back to the model.
 - **It runs locally.** The model runs on your own machine or LAN, so your code is not uploaded anywhere.
-- **It checks against a baseline.** On 10 refactors with a planted silent bug, a small local model (Gemma 4 e4b, "effective 4B") found the bug in 30 of 30 runs. Random fuzzing found it 0 times in 3 of those cases, even with 2000 tries and the exact input shape. See [Benchmark](#benchmark).
+- **It checks against a baseline.** On 10 refactors with a planted silent bug, a small local model (Gemma 4 e4b, "effective 4B") found the bug in 30 of 30 runs. Random fuzzing found it 0 times in 3 of those cases, even with 2000 typed inputs. On 12 harder cases random fuzzing found nothing in 24,000 inputs; the model found 34 of 36. See [Benchmark](#benchmark).
 
 ## Quick start
 
@@ -90,7 +94,7 @@ Labeled results are written in the current directory as `diffwitness.<path>.<fn>
 For a replay-only check of selection and bundling, this command was run on DiffWitness at `febfc6b`:
 
 ```sh
-npm run diffwitness -- --git HEAD~5 --replay
+npm run diffwitness -- --git febfc6b~5..febfc6b --replay
 ```
 
 Excerpt from its actual output:
@@ -110,6 +114,16 @@ Coverage:       old 0/12, new 0/21 branches reached by model inputs
 ```
 
 The run skipped functions pulling in Node builtins and had no replay hypotheses for `randomArgs`. No inputs were executed, so this demonstrates discovery and bundling, not behavioral equivalence. The functions selected by `HEAD~5` will change as history advances. See [the git-mode guide](demo/git-mode.md) for another revision-specific example; omit `--replay` with Ollama running to generate live hypotheses.
+
+### Check every commit automatically
+
+```sh
+node /path/to/DiffWitness/bin/diffwitness.mjs hook install            # report only
+node /path/to/DiffWitness/bin/diffwitness.mjs hook install --strict   # block commits with divergences
+node /path/to/DiffWitness/bin/diffwitness.mjs hook uninstall
+```
+
+The pre-commit hook compares the staged version of each changed exported function against `HEAD`. It never writes files or labels anything. It fails open: if Ollama is unreachable, Node is missing, or bundling fails, it prints one line and lets the commit through. Model requests from the hook time out after 20 s. It refuses to overwrite a pre-commit hook it did not write (use `--force`), and `uninstall` removes only an unmodified DiffWitness hook. With `--amend`, `HEAD` is the commit being amended.
 
 ## Sample terminal output
 
@@ -273,7 +287,10 @@ describe('normalizeOrderId (DiffWitness)', () => {
 | `bench/cases/` | Ten planted-bug refactor pairs. |
 | `bench/hard/` | Twelve rare-edge silent-bug cases. |
 | `bench/real/` | Three adapted query-string fixes with source evidence and licenses. |
-| `bench/experiments/` | Planned destination for experiment results; create it before writing there. |
+| `bench/experiments/` | Raw experiment tables and a log of the code version behind each run. |
+| `bench/dogfood/` | 27 verified commits from es-toolkit, radash and date-fns that changed an exported function, for running git mode on real history. |
+| `scripts/dogfood.ts` | Runs git mode over the dogfood commits. |
+| `src/hook.ts` | `diffwitness hook install` pre-commit hook. |
 | `demo/` | VHS tape, regeneration instructions and terminal GIF. |
 | `demo/git-mode.md` | Git-mode usage and revision-specific replay demonstration. |
 | `scripts/bench.ts` | Live hypothesis and seeded random-baseline benchmark runner. |
@@ -294,13 +311,12 @@ The script prints a Markdown table and writes `bench/results.md`. It reports the
 
 Additional corpora:
 
-- `bench/hard/`: 12 rare-edge cases covering Unicode, floating point, dates, precision, regex state and conditional boundaries. The seed-1 baseline measured **0/2000 silent hits for every case**, using shapes inferred from each planted input. This is a result for that sampler and seed, not proof that random testing can never find them.
+- `bench/hard/`: 12 rare-edge cases covering Unicode, floating point, dates, precision, regex state and conditional boundaries. The seed-1 baseline measured **0/2000 silent hits for every case**, in the final runs using random inputs generated from the declared parameter types (example-derived shapes gave the same 0 hits). This is a result for that sampler and seed, not proof that random testing can never find them.
 - `bench/real/`: three verified query-string fixes (separator encoding, inherited parser lookup, URL whitespace). Each `SOURCE.md` records upstream code, adaptations and MIT licensing. `old.ts` is the corrected reference and `new.ts` the affected version. `regression_commit` is the fix's parent, **not an established introducing commit**.
 
 Select a corpus with `--cases <dir>` (default `bench/cases`) and an output file with `--out <file>` (default `bench/results.md`). Create the output directory first. For live experiments with Ollama running and `DIFFWITNESS_REPLAY` unset:
 
 ```sh
-mkdir -p bench/experiments
 npx tsx scripts/bench.ts --cases bench/hard --out bench/experiments/hard-coverage.md --runs-per-case 3 --random 2000
 DIFFWITNESS_NO_COVERAGE=1 npx tsx scripts/bench.ts --cases bench/hard --out bench/experiments/hard-no-feedback.md --runs-per-case 3 --random 2000
 npx tsx scripts/bench.ts --cases bench/real --out bench/experiments/real.md --runs-per-case 3 --random 2000
@@ -314,9 +330,11 @@ All rows: 3 runs per case, 2000 seeded random inputs per case, Gemma 4 on an RTX
 
 | corpus | gemma4:e4b | gemma4:e2b | random fuzzing |
 | --- | --- | --- | --- |
-| `bench/cases` (10 planted silent bugs) | 30/30 | 29/30 | 0 hits in 3 of 10 cases |
-| `bench/hard` (12 rare-edge bugs) | 34/36 | 29/36 | 0 hits in all 12 cases (24,000 inputs) |
+| `bench/cases` (10 planted silent bugs) | 30/30 ¹ | 29/30 | 0 hits in 3 of 10 cases |
+| `bench/hard` (12 rare-edge bugs) | 34/36 ² | 29/36 | 0 hits in all 12 cases (24,000 inputs) |
 | `bench/real` (3 real query-string fixes) | 9/9 | not run | 0 hits in 1 of 3 cases |
+
+¹ From `bench/results.md`, recorded before coverage feedback and type filtering existed. ² Recorded before type-aware filtering (#39). The e2b columns use the final pipeline (commit `b9afa5d`; the benchmark script's retry was added in `f9142da` without touching the pipeline).
 
 **Coverage feedback ablation** (gemma4:e2b, same code for both columns, commit `b9afa5d`):
 
@@ -329,7 +347,7 @@ Feeding uncovered branch lines back to the model helped most where a bug sits be
 
 Two lessons from running the benchmark:
 - Type filtering exposed inflated numbers. Before parameter types were checked, gemma4:e2b "found" the `dedupe-order` bug by passing a bare string where `string[]` was declared. That was a real difference, but outside the function's contract. Those hypotheses are now dropped, or re-wrapped when the model just spread a lone array argument.
-- The model server returned occasional HTTP 500s. The benchmark retries a failed run once and reports any remaining failures in a separate errors column, never as misses.
+- The model server returned occasional HTTP 500s. The benchmark retries a failed run once and reports any remaining failures in a separate errors column (they still count in the run total; every errors column in these results is 0).
 
 Live results, `gemma4:e4b` on an RTX 4060 laptop over LAN, 3 runs per case, 2000 random inputs per case (from [`bench/results.md`](bench/results.md)):
 
