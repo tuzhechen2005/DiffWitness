@@ -31,6 +31,7 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
   const [oldFn, newFn] = [oldCov.fn, newCov.fn];
   newFn.params = paramsOf(newFn);
   let droppedForType = 0;
+  let repairedForType = 0;
   const runner = await createRunner(oldCov.fn, newCov.fn, { timeoutMs: o.timeoutMs ?? 1000 });
   try {
     const trials: Trial[] = [];
@@ -45,7 +46,11 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
       if (round === 2 && useCov) input.uncovered = uncovered();
       const hyps = await o.hypothesizer.propose(input);
       for (const h of hyps.slice(0, 8)) {
-        if (newFn.params && !conforms(h.args, newFn.params)) { droppedForType++; continue; }
+        if (newFn.params && !conforms(h.args, newFn.params)) {
+          // Small models often spread a lone array argument; re-wrap only when that makes it type-correct.
+          if (newFn.params.length === 1 && conforms([h.args], newFn.params)) { h.args = [h.args]; repairedForType++; }
+          else { droppedForType++; continue; }
+        }
         const pair = await runner.run(h.args);
         if ([pair.old, pair.new].some((x) => x.kind === 'throw' && x.name === 'DiffWitnessAsync'))
           throw new Error('async functions are not supported: DiffWitness compares synchronous pure functions');
@@ -95,7 +100,7 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
     const t0 = trials[0]?.pair.old;
     const neverRan = t0?.kind === 'throw' && trials.every(({ pair: p }) => p.old.kind === 'throw' && p.new.kind === 'throw' && p.old.name === t0.name && p.new.name === t0.name)
       ? { name: t0.name, message: t0.message } : undefined;
-    return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences, baseline, coverage, ...(droppedForType && { droppedForType }), ...(neverRan && { neverRan }) };
+    return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences, baseline, coverage, ...(droppedForType && { droppedForType }), ...(repairedForType && { repairedForType }), ...(neverRan && { neverRan }) };
   } finally {
     await runner.close();
   }

@@ -99,6 +99,8 @@ export interface WitnessReport {
   baseline?: BaselineResult;
   /** Hypotheses dropped before running because their args violate the declared parameter types. */
   droppedForType?: number;
+  /** Hypotheses for a single array parameter that spread the array; re-wrapped because only that made them type-correct. */
+  repairedForType?: number;
   /** Branches executed by the model's inputs, out of all instrumented branches. */
   coverage?: { old: { covered: number; total: number }; new: { covered: number; total: number } };
   /** Set when every trial threw the same error name on both sides: the function never ran normally. */

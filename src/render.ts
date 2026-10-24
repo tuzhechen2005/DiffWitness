@@ -78,6 +78,8 @@ export function renderReport(r: WitnessReport): string {
     const c = r.coverage;
     out.push(`Coverage:       old ${c.old.covered}/${c.old.total}, new ${c.new.covered}/${c.new.total} branches reached by model inputs`);
   }
+  if (r.droppedForType || r.repairedForType)
+    out.push(pc.dim(`Type check:     ${r.droppedForType ?? 0} model inputs dropped for violating the signature, ${r.repairedForType ?? 0} re-wrapped`));
   // Show both sets side by side instead of claiming exclusivity: exact-match comparison would overstate it.
   if (r.baseline?.repros.length) out.push(pc.dim(`  random repros: ${r.baseline.repros.slice(0, 10).map(fmtArgs).join(' ')}${r.baseline.repros.length > 10 ? ' …' : ''}`));
   if (r.divergences.length) out.push(`  model repros:  ${r.divergences.map((d) => fmtArgs(d.args)).join(' ')}`);
