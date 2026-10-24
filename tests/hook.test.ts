@@ -42,6 +42,18 @@ describe('hook install', () => {
     installHook(repo, { force: true });
     expect(readFileSync(hookFile(), 'utf8')).toContain('diffwitness-hook');
   });
+
+  it('refuses to uninstall an edited hook; script has no npx and skips when the bin is missing', () => {
+    installHook(repo, {});
+    const text = readFileSync(hookFile(), 'utf8');
+    expect(text).not.toContain('npx');
+    writeFileSync(hookFile(), text + 'echo extra\n');
+    expect(() => uninstallHook(repo)).toThrow(/nothing removed/);
+    const gone = text.replace(/\[ -f '[^']*'/, "[ -f '/nonexistent/bin'");
+    writeFileSync(hookFile(), gone);
+    const r = spawnSync('sh', [hookFile()], { encoding: 'utf8' });
+    expect([r.status, r.stdout]).toEqual([0, expect.stringContaining('is missing')]);
+  });
 });
 
 describe('hook run', () => {
@@ -58,15 +70,16 @@ describe('hook run', () => {
     }
     expect(out.join('\n')).toContain('a.ts:total behaves differently');
     expect(git(repo, 'status', '--porcelain')).toBe('MM a.ts\n'); // nothing written
-  });
+  }, 20_000);
 
   it('exits 0 with one line when the model is unreachable, even through git commit', () => {
     installHook(repo, { strict: true });
     stageChange();
-    const env = { ...process.env, OLLAMA_URL: 'http://127.0.0.1:1' };
+    const { DIFFWITNESS_REPLAY: _r, DIFFWITNESS_FIXTURES: _f, ...clean } = process.env;
+    const env = { ...clean, OLLAMA_URL: 'http://127.0.0.1:1' };
     const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-m', 'two'], { cwd: repo, env, encoding: 'utf8' });
     expect(r.status).toBe(0);
     expect(r.stdout + r.stderr).toContain('diffwitness: model unreachable, check skipped');
     expect(git(repo, 'log', '--format=%s', '-1').trim()).toBe('two');
-  });
+  }, 20_000);
 });

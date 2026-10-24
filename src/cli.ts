@@ -15,7 +15,8 @@ import { fmtArgs, jsonSafe, renderReport } from './render';
 
 export const USAGE = 'usage: diffwitness <old.ts> <new.ts> [--label bug|intended] [--json] [--replay] [--out file] [--runs n] [--fn name]\n' +
   '       diffwitness --git <base>[..<head>] [--path file] [--fn name] [--label bug|intended] [--json] [--replay] [--runs n]\n' +
-  '       diffwitness hook install [--force] [--strict] | hook uninstall';
+  '       diffwitness hook install [--force] [--strict] | hook uninstall\n' +
+  '       (the hook checks staged vs HEAD; with git commit --amend, HEAD is the commit being amended)';
 
 /** Relative import specifier from the test file to the new source file, without `.ts`. */
 export function importPathFor(out: string, newFile: string): string {

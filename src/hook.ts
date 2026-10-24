@@ -15,18 +15,22 @@ const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 const hookPath = (cwd: string) => join(git(cwd, 'rev-parse', '--path-format=absolute', '--git-path', 'hooks').trim(), 'pre-commit');
 
-/** The hook calls this package by absolute path (resolved at install time), falling back to npx if it moved. */
+/** The hook calls this package by absolute path (resolved at install time); never npx, which would install an unpublished name. */
 export const hookScript = (strict: boolean) => `#!/bin/sh
 ${MARK}
-if [ -f ${q(BIN)} ]; then
-  exec node ${q(BIN)} hook run${strict ? ' --strict' : ''}
-fi
-exec npx diffwitness hook run${strict ? ' --strict' : ''}
+command -v node >/dev/null 2>&1 || { echo "diffwitness: node not found, skipping"; exit 0; }
+[ -f ${q(BIN)} ] || { echo "diffwitness: ${BIN.replace(/["$`\\]/g, '')} is missing (moved?); reinstall with 'diffwitness hook install', skipping"; exit 0; }
+exec node ${q(BIN)} hook run${strict ? ' --strict' : ''}
 `;
+
+const isOurs = (file: string) => {
+  const text = readFileSync(file, 'utf8');
+  return text === hookScript(true) || text === hookScript(false);
+};
 
 export function installHook(cwd: string, o: { force?: boolean; strict?: boolean }): string {
   const file = hookPath(cwd);
-  if (existsSync(file) && !o.force && !readFileSync(file, 'utf8').includes(MARK))
+  if (existsSync(file) && !o.force && !isOurs(file))
     throw new Error(`${file} already exists and is not DiffWitness's; use --force to overwrite it`);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, hookScript(!!o.strict));
@@ -36,7 +40,7 @@ export function installHook(cwd: string, o: { force?: boolean; strict?: boolean 
 
 export function uninstallHook(cwd: string): string {
   const file = hookPath(cwd);
-  if (!existsSync(file) || !readFileSync(file, 'utf8').includes(MARK)) throw new Error(`no DiffWitness hook at ${file}; nothing removed`);
+  if (!existsSync(file) || !isOurs(file)) throw new Error(`${file} is missing or not exactly the hook DiffWitness installed; nothing removed`);
   unlinkSync(file);
   return file;
 }
@@ -66,7 +70,7 @@ export async function runHook(cwd: string, o: { strict?: boolean; hypothesizer?:
       } finally {
         delete process.env.GIT_INDEX_FILE; // shortcut: not restored, runHook is the hook process's whole life
       }
-      const hypothesizer = o.hypothesizer ?? hypothesizerFromEnv(process.env);
+      const hypothesizer = o.hypothesizer ?? hypothesizerFromEnv(process.env, { timeoutMs: 20_000 });
       for (const f of fns) {
         try {
           const old = await withRevision(repo, 'HEAD', (dir) => bundleFunction(dir, f.path, f.name, f.oldSource, repo));
