@@ -71,7 +71,11 @@ export interface Divergence {
 export interface BaselineResult {
   runs: number;
   divergent: number;
+  /** Divergent runs where both versions returned normally. */
+  silent: number;
   firstDivergentArgs?: Args;
+  /** Distinct minimal repros from shrinking the first 20 divergent random runs. */
+  repros: Args[];
 }
 
 export interface WitnessReport {
