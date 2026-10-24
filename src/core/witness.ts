@@ -1,14 +1,17 @@
 import { mulberry32, inferShape, randomArgs } from './baseline';
 import { sameOutcome } from './compare';
-import { instrument } from './coverage';
+import { instrument, type Branch } from './coverage';
 import { createRunner } from './executor';
 import { loadFunction } from './loader';
 import { shrink } from './shrink';
-import type { Args, BaselineResult, Divergence, Hypothesizer, Pair, ProposeInput, Runner, Trial, WitnessReport } from './types';
+import type { Args, BaselineResult, Divergence, Hypothesizer, LoadedFn, Pair, ProposeInput, Runner, Trial, WitnessReport } from './types';
 
 export interface WitnessOptions {
-  oldFile: string;
-  newFile: string;
+  oldFile?: string;
+  newFile?: string;
+  /** Preloaded (e.g. bundled) functions with their branches, instead of oldFile/newFile. */
+  old?: { fn: LoadedFn; branches: Branch[] };
+  new?: { fn: LoadedFn; branches: Branch[] };
   fn?: string;
   hypothesizer: Hypothesizer;
   timeoutMs?: number;
@@ -22,8 +25,9 @@ const diverges = (p: Pair) => !sameOutcome(p.old, p.new);
 const kinds = (p: Pair) => `${p.old.kind}/${p.new.kind}`;
 
 export async function witness(o: WitnessOptions): Promise<WitnessReport> {
-  const [oldFn, newFn] = await Promise.all([loadFunction(o.oldFile, o.fn), loadFunction(o.newFile, o.fn)]);
-  const [oldCov, newCov] = [instrument(oldFn), instrument(newFn)];
+  const load = async (pre: WitnessOptions['old'], file?: string) => pre ?? instrument(await loadFunction(file ?? '', o.fn));
+  const [oldCov, newCov] = await Promise.all([load(o.old, o.oldFile), load(o.new, o.newFile)]);
+  const [oldFn, newFn] = [oldCov.fn, newCov.fn];
   const runner = await createRunner(oldCov.fn, newCov.fn, { timeoutMs: o.timeoutMs ?? 1000 });
   try {
     const trials: Trial[] = [];
@@ -80,8 +84,8 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
     // Without branches every divergence shares the empty path, so grouping would say nothing.
     const divergences = oldCov.branches.length + newCov.branches.length ? cluster(found) : found;
     const coverage = {
-      old: { covered: hit.old.size, total: oldCov.branches.length },
-      new: { covered: hit.new.size, total: newCov.branches.length },
+      old: { covered: oldCov.branches.filter((b) => hit.old.has(b.id)).length, total: oldCov.branches.length },
+      new: { covered: newCov.branches.filter((b) => hit.new.has(b.id)).length, total: newCov.branches.length },
     };
     return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences, baseline, coverage };
   } finally {

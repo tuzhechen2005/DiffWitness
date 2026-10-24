@@ -13,9 +13,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "esbuild": "^0.25.12",
     "picocolors": "^1.1.1",
-    "typescript": "^5.9.3",
-    "tsx": "^4.20.6"
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
