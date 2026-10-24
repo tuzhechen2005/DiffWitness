@@ -28,6 +28,7 @@ describe('random baseline', () => {
         expect(Number(value)).toBeGreaterThanOrEqual(-1000);
         expect(Number(value)).toBeLessThanOrEqual(1000);
       } else if (shape === 'boolean') expect(typeof value).toBe('boolean');
+      else if ('literal' in shape || 'union' in shape) throw new Error('inferShape never yields these');
       else if ('array' in shape) {
         expect(Array.isArray(value)).toBe(true);
         expect((value as Json[]).length).toBeLessThanOrEqual(5);

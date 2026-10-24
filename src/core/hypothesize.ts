@@ -49,6 +49,7 @@ export function buildPrompt({ old, new: next, round, previous, uncovered = [] }:
     'Make each input test a different behavior; do not repeat one idea.',
     'For each input give a reason: one short sentence.',
   ];
+  if (next.params?.length) lines.splice(1, 0, `Parameter types (from the TypeScript signature): ${next.params.map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.text}`).join(', ')}`);
   if (round === 2) {
     lines.push('', 'Already tried, with the real results of running both versions:');
     previous.forEach((t, i) =>
