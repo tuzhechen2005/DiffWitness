@@ -1,0 +1,8 @@
+{
+  "silent": [
+    true,
+    false,
+    true
+  ],
+  "note": "Operator precedence lets blocked owners through."
+}

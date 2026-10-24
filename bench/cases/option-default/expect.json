@@ -1,0 +1,8 @@
+{
+  "silent": [
+    {
+      "retries": 0
+    }
+  ],
+  "note": "An explicit zero retries setting is replaced by the default."
+}
