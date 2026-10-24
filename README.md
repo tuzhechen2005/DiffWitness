@@ -308,7 +308,28 @@ npx tsx scripts/bench.ts --cases bench/real --out bench/experiments/real.md --ru
 
 `DIFFWITNESS_NO_COVERAGE=1` is read by the benchmark script for the feedback ablation: it omits uncovered branches from the prompt and triggers round two only when no silent divergence has been found. Instrumentation, coverage collection and clustering still run. The CLI does not read this variable.
 
-<!-- EXPERIMENTS: integrator fills -->
+### Experiments
+
+All rows: 3 runs per case, 2000 seeded random inputs per case, Gemma 4 on an RTX 4060 laptop over LAN. Raw tables and the code version behind each run are in [`bench/experiments/`](bench/experiments/).
+
+| corpus | gemma4:e4b | gemma4:e2b | random fuzzing |
+| --- | --- | --- | --- |
+| `bench/cases` (10 planted silent bugs) | 30/30 | 29/30 | 0 hits in 3 of 10 cases |
+| `bench/hard` (12 rare-edge bugs) | 34/36 | 29/36 | 0 hits in all 12 cases (24,000 inputs) |
+| `bench/real` (3 real query-string fixes) | 9/9 | not run | 0 hits in 1 of 3 cases |
+
+**Coverage feedback ablation** (gemma4:e2b, same code for both columns, commit `b9afa5d`):
+
+| corpus | feedback on | feedback off |
+| --- | --- | --- |
+| `bench/hard` | **29/36** | 22/36 |
+| `bench/cases` | 29/30 | 28/30 |
+
+Feeding uncovered branch lines back to the model helped most where a bug sits behind a rarely taken branch: `premium-boundary` went from 0/3 to 2/3 and `half-cent-rounding` from 0/3 to 2/3. `unicode-casefold` stayed at 0/3 either way. With gemma4:e4b on `bench/hard` the difference was within noise (34/36 on vs 35/36 off, measured before type-aware filtering), so the feedback mainly helps the smaller model. Three runs per case is a small sample; treat these as directional.
+
+Two lessons from running the benchmark:
+- Type filtering exposed inflated numbers. Before parameter types were checked, gemma4:e2b "found" the `dedupe-order` bug by passing a bare string where `string[]` was declared. That was a real difference, but outside the function's contract. Those hypotheses are now dropped, or re-wrapped when the model just spread a lone array argument.
+- The model server returned occasional HTTP 500s. The benchmark retries a failed run once and reports any remaining failures in a separate errors column, never as misses.
 
 Live results, `gemma4:e4b` on an RTX 4060 laptop over LAN, 3 runs per case, 2000 random inputs per case (from [`bench/results.md`](bench/results.md)):
 
