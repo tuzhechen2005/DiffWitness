@@ -1,0 +1,6 @@
+{
+  "silent": [
+    "caf\u00e9"
+  ],
+  "note": "Accented letters are lost instead of transliterated."
+}
