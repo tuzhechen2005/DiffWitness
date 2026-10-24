@@ -72,7 +72,7 @@ describe('ollama', () => {
     expect(prompt).toContain('["00128"]');
     expect(prompt).toContain('returned "A"');
     expect(prompt).toContain('threw TypeError: boom');
-    expect(prompt).toContain('SAME');
+    expect(prompt).toContain('real results');
   });
 
   it('non-200 and network errors name the URL and model and suggest --replay', async () => {

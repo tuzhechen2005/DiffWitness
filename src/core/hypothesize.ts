@@ -38,13 +38,15 @@ export function buildPrompt({ old, new: next, round, previous }: ProposeInput): 
     'Propose up to 8 inputs. Each input is a JSON array of positional arguments (JSON values only).',
     'Choose inputs where old and new would return different values, or where one throws and the other does not.',
     'Prefer realistic inputs that match the parameter types in the signature, and edge cases tied to the specific code change.',
+    'Most valuable are SILENT divergences: inputs valid for both versions (neither throws) that return different values. Include several.',
+    'Make each input test a different behavior; do not repeat one idea.',
     'For each input give a reason: one short sentence.',
   ];
   if (round === 2) {
-    lines.push('', 'These inputs were already tried, and old and new behaved the SAME on every one:');
+    lines.push('', 'Already tried, with the real results of running both versions:');
     previous.forEach((t, i) =>
       lines.push(`${i + 1}. args ${show(t.hypothesis.args)}: old ${showOutcome(t.pair.old)}; new ${showOutcome(t.pair.new)}`));
-    lines.push('Propose inputs in different directions from these.');
+    lines.push('None of these is a silent divergence. Propose NEW inputs where both versions return normally but the values differ.');
   }
   return lines.join('\n');
 }

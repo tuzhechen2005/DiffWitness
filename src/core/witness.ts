@@ -32,7 +32,8 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
           throw new Error('async functions are not supported: DiffWitness compares synchronous pure functions');
         trials.push({ hypothesis: h, pair });
       }
-      if (trials.some((t) => diverges(t.pair))) break;
+      // Round 2 hunts for silent divergences (both return, values differ), the ones nobody notices.
+      if (trials.some((t) => diverges(t.pair) && kinds(t.pair) === 'return/return')) break;
     }
 
     const byArgs = new Map<string, Divergence>();
