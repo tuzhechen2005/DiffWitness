@@ -2,6 +2,10 @@
 
 **Your refactor passed every test. It also turned order `00128` into `128`.**
 
+![DiffWitness finding the leading-zero bug, exporting failing regression tests, then checking a rounding refactor](demo/demo.gif)
+
+<sub>Recorded with `--replay`: real Gemma 4 e4b replies captured from a live run, so the GIF is reproducible. Regenerate with `vhs demo/demo.tape`.</sub>
+
 DiffWitness checks whether two versions of a pure TypeScript function still behave the same. A local open-weight model (Gemma 4 e4b, via Ollama) reads both versions and proposes inputs where they might differ. DiffWitness then runs both versions on every proposed input. Execution decides whether a difference is real; the model's opinion does not. Each real difference is shrunk to a minimal repro, you label it *bug* or *intended*, and DiffWitness writes a vitest regression file.
 
 ```text
