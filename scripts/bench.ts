@@ -62,7 +62,7 @@ for (const name of readdirSync(values.cases!).sort()) {
   }
   lines.push(`| ${name} | ${hits}/${runs} (${(hits / runs * 100).toFixed(1)}%) | ${randomHits} / ${random} | ${seconds.toFixed(3)} |`);
 }
-lines.splice(3, 0, '', `Random baseline shapes: declared parameter types for ${fromTypes} of ${readdirSync(values.cases!).length} cases, the expected silent args otherwise.`);
+lines.splice(lines.findIndex(l => l.startsWith('| case')), 0, `Random baseline shapes: declared parameter types for ${fromTypes} of ${readdirSync(values.cases!).length} cases, the expected silent args otherwise.`, '');
 lines.push('', 'Model timing includes the complete witness pipeline (loading, hypotheses, execution, and shrinking); the separate random baseline is excluded.', '');
 const markdown = lines.join('\n');
 console.log(markdown);

@@ -97,9 +97,9 @@ export interface WitnessReport {
   divergences: Divergence[];
   /** Naive random fuzzing over the shape of the first hypothesis' args; absent if no hypotheses. */
   baseline?: BaselineResult;
-  /** Branches executed by the model's inputs, out of all instrumented branches. */
   /** Hypotheses dropped before running because their args violate the declared parameter types. */
   droppedForType?: number;
+  /** Branches executed by the model's inputs, out of all instrumented branches. */
   coverage?: { old: { covered: number; total: number }; new: { covered: number; total: number } };
 }
 

@@ -12,6 +12,8 @@ export interface Param {
 }
 
 const FILE = 'signature.ts';
+// JSON cannot carry undefined, so a type that allows it can only be expressed by omission.
+const hasUndefined = (t: ts.Type) => !!(t.flags & ts.TypeFlags.Undefined) || (t.isUnion() && t.types.some((x) => x.flags & ts.TypeFlags.Undefined));
 
 /** Parameters of the exported function `fn.name`, from the TypeScript checker. Undefined if not found or rest params are used. */
 export function paramsOf(fn: LoadedFn): Param[] | undefined {
@@ -64,7 +66,8 @@ export function paramsOf(fn: LoadedFn): Param[] | undefined {
       const inner = shapeOf(checker.getTypeOfSymbolAtLocation(prop, decl), depth + 1);
       if (!inner) return undefined;
       object[prop.name] = inner;
-      if (prop.flags & ts.SymbolFlags.Optional) optional.push(prop.name);
+      const propType = checker.getTypeOfSymbolAtLocation(prop, decl);
+      if (prop.flags & ts.SymbolFlags.Optional || hasUndefined(propType)) optional.push(prop.name);
     }
     return optional.length ? { object, optional } : { object };
   };
@@ -73,7 +76,7 @@ export function paramsOf(fn: LoadedFn): Param[] | undefined {
     const type = checker.getTypeAtLocation(p);
     return {
       name: p.name.getText(sf),
-      optional: !!p.questionToken || !!p.initializer,
+      optional: !!p.questionToken || !!p.initializer || hasUndefined(type),
       text: checker.typeToString(type).replace(/ \| undefined$/, ''),
       shape: shapeOf(type),
     };

@@ -50,6 +50,11 @@ describe('conforms', () => {
     expect(conforms(['1', 'a', []], ps)).toBe(false); // array where object expected
     expect(conforms(['1', 'a', null, 1, 2], ps)).toBe(false); // extra arg
   });
+  it('treats undefined in the type as optional', () => {
+    expect(conforms([], params(`export function f(a: number | undefined) {}`)!)).toBe(true);
+    expect(conforms([{}], params(`export function f(o: { x: string | undefined }) {}`)!)).toBe(true);
+    expect(conforms([{ x: 1 }], params(`export function f(o: { x: string | undefined }) {}`)!)).toBe(false);
+  });
   it('lets unknown shapes through', () => {
     expect(conforms([1, 2], params(`export function f(a: any, b: Date) {}`)!)).toBe(true);
   });
