@@ -345,6 +345,18 @@ All rows: 3 runs per case, 2000 seeded random inputs per case, Gemma 4 on an RTX
 
 Feeding uncovered branch lines back to the model helped most where a bug sits behind a rarely taken branch: `premium-boundary` went from 0/3 to 2/3 and `half-cent-rounding` from 0/3 to 2/3. `unicode-casefold` stayed at 0/3 either way. With gemma4:e4b on `bench/hard` the difference was within noise (34/36 on vs 35/36 off, measured before type-aware filtering), so the feedback mainly helps the smaller model. Three runs per case is a small sample; treat these as directional.
 
+### Real history (git mode)
+
+`scripts/dogfood.ts` ran git mode with gemma4:e4b, once per commit, on 27 verified commits from es-toolkit, radash and date-fns that changed an exported function. Full table: [`bench/dogfood/results.md`](bench/dogfood/results.md).
+
+| commit kind | commits | found a behavior difference |
+| --- | --- | --- |
+| bug fix | 22 | 10 |
+| feature | 2 | 1 |
+| refactor / perf | 3 | 0 |
+
+All 27 were bundled and checked; none were skipped. On fixes and features, a difference is expected: it is a concrete input that shows what the commit changed (radash `snake`: 10 distinct repros; `camel`: 8). On the three behavior-preserving commits DiffWitness found nothing, which is consistent with them but is not a proof. I have not yet hand-checked that each difference matches the fix's intent. Mean time per commit was about 45 s, including bundling.
+
 Two lessons from running the benchmark:
 - Type filtering exposed inflated numbers. Before parameter types were checked, gemma4:e2b "found" the `dedupe-order` bug by passing a bare string where `string[]` was declared. That was a real difference, but outside the function's contract. Those hypotheses are now dropped, or re-wrapped when the model just spread a lone array argument.
 - The model server returned occasional HTTP 500s. The benchmark retries a failed run once and reports any remaining failures in a separate errors column (they still count in the run total; every errors column in these results is 0).
