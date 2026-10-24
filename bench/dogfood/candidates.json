@@ -1,0 +1,245 @@
+[
+  {
+    "repo": "toss/es-toolkit",
+    "url": "https://github.com/toss/es-toolkit/commit/69a4fd1a4390fe803ed90b0bad700513f64fd802",
+    "sha": "69a4fd1a4390fe803ed90b0bad700513f64fd802",
+    "path": "src/compat/string/startCase.ts",
+    "fn": "startCase",
+    "message": "fix[startCase]: only uppercase the first letter of each word like lodash (#2160)",
+    "kind": "fix"
+  },
+  {
+    "repo": "toss/es-toolkit",
+    "url": "https://github.com/toss/es-toolkit/commit/64efa4154b142c42e088b3d873bf0c998366093c",
+    "sha": "64efa4154b142c42e088b3d873bf0c998366093c",
+    "path": "src/compat/string/truncate.ts",
+    "fn": "truncate",
+    "message": "fix(compat/truncate): escape string separator in RegExp (#2129) (#2130)",
+    "kind": "fix"
+  },
+  {
+    "repo": "toss/es-toolkit",
+    "url": "https://github.com/toss/es-toolkit/commit/43e1118884e07cebdf1e767038f6e7f697fa27ec",
+    "sha": "43e1118884e07cebdf1e767038f6e7f697fa27ec",
+    "path": "src/string/deburr.ts",
+    "fn": "deburr",
+    "message": "fix[deburr]: keep letters of non-Latin scripts as they are (#2124)",
+    "kind": "fix"
+  },
+  {
+    "repo": "toss/es-toolkit",
+    "url": "https://github.com/toss/es-toolkit/commit/ebea440fe47da124bfa7d9ed6c3084ad5e712832",
+    "sha": "ebea440fe47da124bfa7d9ed6c3084ad5e712832",
+    "path": "src/compat/string/deburr.ts",
+    "fn": "deburr",
+    "message": "fix[deburr]: only deburr Latin letters like lodash (#2123)",
+    "kind": "fix"
+  },
+  {
+    "repo": "toss/es-toolkit",
+    "url": "https://github.com/toss/es-toolkit/commit/b26a445dedaf0a307d83fa691c8ddfe9e3b4ddc9",
+    "sha": "b26a445dedaf0a307d83fa691c8ddfe9e3b4ddc9",
+    "path": "src/compat/math/add.ts",
+    "fn": "add",
+    "message": "fix(add,subtract,multiply,divide): match Lodash on null operands (#2056)",
+    "kind": "fix"
+  },
+  {
+    "repo": "toss/es-toolkit",
+    "url": "https://github.com/toss/es-toolkit/commit/6364563b317e4e97d33ada2d77da1a9867d46f8e",
+    "sha": "6364563b317e4e97d33ada2d77da1a9867d46f8e",
+    "path": "src/compat/array/without.ts",
+    "fn": "without",
+    "message": "fix[differenceWith, without]: normalize `-0` to `0` like lodash (#2049)",
+    "kind": "fix"
+  },
+  {
+    "repo": "toss/es-toolkit",
+    "url": "https://github.com/toss/es-toolkit/commit/3aa823c9a79c1c3a008edee34cdcecdff959d517",
+    "sha": "3aa823c9a79c1c3a008edee34cdcecdff959d517",
+    "path": "src/compat/object/has.ts",
+    "fn": "has",
+    "message": "fix(compat): normalize the -0 path key in has and hasIn like lodash (#2035)",
+    "kind": "fix"
+  },
+  {
+    "repo": "toss/es-toolkit",
+    "url": "https://github.com/toss/es-toolkit/commit/51b4612f986d4641dd704c6e329c3684b82b7ebb",
+    "sha": "51b4612f986d4641dd704c6e329c3684b82b7ebb",
+    "path": "src/compat/util/toPath.ts",
+    "fn": "toPath",
+    "message": "fix(compat/toPath): split unquoted dotted keys inside brackets like lodash (#1899)",
+    "kind": "fix"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/4cab1900d08e0997abc4f17aec3cbfe18958d766",
+    "sha": "4cab1900d08e0997abc4f17aec3cbfe18958d766",
+    "path": "src/object.ts",
+    "fn": "set",
+    "message": "fix: set and construct handling strings starting with numbers (#455)",
+    "kind": "fix"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/2d6c10aed775c5e6a8453c37d6e0f09c26680fe2",
+    "sha": "2d6c10aed775c5e6a8453c37d6e0f09c26680fe2",
+    "path": "src/object.ts",
+    "fn": "get",
+    "message": "extend get function to handle path contain quote (#336)",
+    "kind": "feature"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/c378bd1bc401045ed7d8e5e47b275d2159ce43d5",
+    "sha": "c378bd1bc401045ed7d8e5e47b275d2159ce43d5",
+    "path": "src/string.ts",
+    "fn": "snake",
+    "message": "fix: split number from letters in snake func (#311)",
+    "kind": "fix"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/b97e47d2ed19dbf395c5c00f36726d62f79fd93b",
+    "sha": "b97e47d2ed19dbf395c5c00f36726d62f79fd93b",
+    "path": "src/object.ts",
+    "fn": "pick",
+    "message": "fix(object): fixed `pick` not working when target object is proxied or has custom `hasOwnProperty` (#295)",
+    "kind": "fix"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/f2e6948a787282e41c79b58181b1bb7c51e90164",
+    "sha": "f2e6948a787282e41c79b58181b1bb7c51e90164",
+    "path": "src/object.ts",
+    "fn": "set",
+    "message": "fix set function to allow falsy values (#263)",
+    "kind": "fix"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/9981032dc41380e6d19c94852f4484c0f36f985d",
+    "sha": "9981032dc41380e6d19c94852f4484c0f36f985d",
+    "path": "src/string.ts",
+    "fn": "trim",
+    "message": "fix trim throwing regex error (#251)",
+    "kind": "fix"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/9266717f5aff3df9792c0e6dba94ee473c1480b7",
+    "sha": "9266717f5aff3df9792c0e6dba94ee473c1480b7",
+    "path": "src/object.ts",
+    "fn": "assign",
+    "message": "assign should keep unique values (#249)",
+    "kind": "fix"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/370cc44ab982e67d3c037030625f1857d0c276fb",
+    "sha": "370cc44ab982e67d3c037030625f1857d0c276fb",
+    "path": "src/number.ts",
+    "fn": "toInt",
+    "message": "allow null default in toFloat and toInt (#134)",
+    "kind": "feature"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/383a515eb5f1955f72a16e9cde1c051f4ac4224d",
+    "sha": "383a515eb5f1955f72a16e9cde1c051f4ac4224d",
+    "path": "src/string.ts",
+    "fn": "camel",
+    "message": "Fix snake camel dash (#114)",
+    "kind": "fix"
+  },
+  {
+    "repo": "sodiray/radash",
+    "url": "https://github.com/sodiray/radash/commit/3271d3fe7ac93dfa10b921effd9154b1b11e9c0e",
+    "sha": "3271d3fe7ac93dfa10b921effd9154b1b11e9c0e",
+    "path": "src/array.ts",
+    "fn": "flat",
+    "message": "improve performance by not using spread operator #205 (#205)",
+    "kind": "perf"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/882ced61c692c7c4a79eaaec6eb07cb9c8c9195b",
+    "sha": "882ced61c692c7c4a79eaaec6eb07cb9c8c9195b",
+    "path": "src/daysToWeeks/index.ts",
+    "fn": "daysToWeeks",
+    "message": "Fix daysToWeeks returning negative 0",
+    "kind": "fix"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/b15fdacc4ec821edf51cc517a8648b953d9cb18f",
+    "sha": "b15fdacc4ec821edf51cc517a8648b953d9cb18f",
+    "path": "src/roundToNearestMinutes/index.ts",
+    "fn": "roundToNearestMinutes",
+    "message": "Fix `roundToNearestMinutes` (#3132)",
+    "kind": "fix"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/9ac551ce5c4f87b298c75cc961f50f9019b3f38b",
+    "sha": "9ac551ce5c4f87b298c75cc961f50f9019b3f38b",
+    "path": "src/areIntervalsOverlapping/index.ts",
+    "fn": "areIntervalsOverlapping",
+    "message": "Fix bug in areIntervalsOverlapping (#3628) (closes #3614)",
+    "kind": "fix"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/0d1a223993737dbefb98a668c8394f1b31743ced",
+    "sha": "0d1a223993737dbefb98a668c8394f1b31743ced",
+    "path": "src/isWithinInterval/index.ts",
+    "fn": "isWithinInterval",
+    "message": "Fix isWithinInterval not sorting dates correctly",
+    "kind": "fix"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/aa264e394b66af6c2c4d8d4e2774d0b5bb8f9285",
+    "sha": "aa264e394b66af6c2c4d8d4e2774d0b5bb8f9285",
+    "path": "src/getOverlappingDaysInIntervals/index.ts",
+    "fn": "getOverlappingDaysInIntervals",
+    "message": "Fix DST issue in getOverlappingDaysInIntervals",
+    "kind": "fix"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/29394724f78d2c0ff23b3c6a9c93965eb5b0ac66",
+    "sha": "29394724f78d2c0ff23b3c6a9c93965eb5b0ac66",
+    "path": "src/differenceInCalendarDays/index.ts",
+    "fn": "differenceInCalendarDays",
+    "message": "Fix incorrect rounding introduced in v3.3.0",
+    "kind": "fix"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/ad2c654a6a97ebc93961e860760ea1d956fc7cba",
+    "sha": "ad2c654a6a97ebc93961e860760ea1d956fc7cba",
+    "path": "src/getOverlappingDaysInIntervals/index.ts",
+    "fn": "getOverlappingDaysInIntervals",
+    "message": "Fix bug in getOverlappingDaysInIntervals",
+    "kind": "fix"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/2e7272029f89601baa4bfc229bdba070a4c066a6",
+    "sha": "2e7272029f89601baa4bfc229bdba070a4c066a6",
+    "path": "src/getSeconds/index.ts",
+    "fn": "getSeconds",
+    "message": "Add tz support to fromUnixTime",
+    "kind": "refactor"
+  },
+  {
+    "repo": "date-fns/date-fns",
+    "url": "https://github.com/date-fns/date-fns/commit/6da817b939f9b36416b0555e8c8d2b84c2974941",
+    "sha": "6da817b939f9b36416b0555e8c8d2b84c2974941",
+    "path": "src/lightFormat/index.ts",
+    "fn": "lightFormat",
+    "message": "Random code cleanup",
+    "kind": "refactor"
+  }
+]
