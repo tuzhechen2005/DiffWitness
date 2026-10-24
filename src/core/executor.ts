@@ -32,7 +32,10 @@ function call(side, args) {
     prelude.runInContext(ctx);
     (f.script ??= new vm.Script(f.code)).runInContext(ctx, { timeout: left() });
     f.call ??= new vm.Script('module.exports[' + JSON.stringify(f.name) + '](...JSON.parse(__args, (k, v) => (v === ' + JSON.stringify(NEG0) + ' ? -0 : v)))');
-    return { kind: 'return', value: f.call.runInContext(ctx, { timeout: left() }) };
+    const value = f.call.runInContext(ctx, { timeout: left() });
+    // shortcut: async functions are rejected (witness() aborts on this name), support them if users need it.
+    if (value !== null && typeof value === 'object' && typeof value.then === 'function') return { kind: 'throw', name: 'DiffWitnessAsync', message: 'returned a Promise' };
+    return { kind: 'return', value };
   } catch (e) {
     // vm creates its timeout error inside the context realm, so match it by code, not instanceof.
     if (e !== null && typeof e === 'object' && e.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') return { kind: 'timeout' };

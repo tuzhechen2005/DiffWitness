@@ -26,7 +26,12 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
     for (const round of [1, 2] as const) {
       rounds = round;
       const hyps = await o.hypothesizer.propose({ old: oldFn, new: newFn, round, previous: [...trials] });
-      for (const h of hyps.slice(0, 8)) trials.push({ hypothesis: h, pair: await runner.run(h.args) });
+      for (const h of hyps.slice(0, 8)) {
+        const pair = await runner.run(h.args);
+        if ([pair.old, pair.new].some((x) => x.kind === 'throw' && x.name === 'DiffWitnessAsync'))
+          throw new Error('async functions are not supported: DiffWitness compares synchronous pure functions');
+        trials.push({ hypothesis: h, pair });
+      }
       if (trials.some((t) => diverges(t.pair))) break;
     }
 
