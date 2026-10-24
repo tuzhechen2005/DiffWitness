@@ -11,6 +11,12 @@ import { fmtArgs, jsonSafe, renderReport } from './render';
 
 export const USAGE = 'usage: diffwitness <old.ts> <new.ts> [--label bug|intended] [--json] [--replay] [--out file] [--runs n]';
 
+/** Relative import specifier from the test file to the new source file, without `.ts`. */
+export function importPathFor(out: string, newFile: string): string {
+  const rel = relative(dirname(resolve(out)), resolve(newFile)).replace(/\\/g, '/').replace(/\.ts$/, '');
+  return rel.startsWith('../') ? rel : `./${rel}`;
+}
+
 export class UsageError extends Error {}
 
 export function parseCli(argv: string[]) {
@@ -43,12 +49,15 @@ async function labelAll(ds: Divergence[], fixed: Label | undefined, fnName: stri
   if (!process.stdin.isTTY) return [];
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const items: LabeledDivergence[] = [];
-  for (const d of ds) {
-    const a = (await rl.question(`${fnName}${fmtArgs(d.args)}  [b]ug / [i]ntended / [s]kip: `)).trim().toLowerCase();
-    if (a === 'b' || a === 'bug') items.push({ divergence: d, label: 'bug' });
-    else if (a === 'i' || a === 'intended') items.push({ divergence: d, label: 'intended' });
+  try {
+    for (const d of ds) {
+      const a = (await rl.question(`${fnName}${fmtArgs(d.args)}  [b]ug / [i]ntended / [s]kip: `)).trim().toLowerCase();
+      if (a === 'b' || a === 'bug') items.push({ divergence: d, label: 'bug' });
+      else if (a === 'i' || a === 'intended') items.push({ divergence: d, label: 'intended' });
   }
-  rl.close();
+  } finally {
+    rl.close();
+  }
   return items;
 }
 
@@ -62,8 +71,7 @@ async function main(argv: string[]) {
   const items = await labelAll(report.divergences, o.label, report.fnName);
   if (!items.length) return;
   const out = resolve(o.out);
-  const rel = relative(dirname(out), resolve(o.newFile)).replace(/\\/g, '/').replace(/\.ts$/, '');
-  const importPath = rel.startsWith('.') ? rel : `./${rel}`;
+  const importPath = importPathFor(out, o.newFile);
   writeFileSync(out, exportVitest({ fnName: report.fnName, importPath, items }));
   console.log(`\nWrote ${items.length} regression test(s) to ${o.out}`);
 }

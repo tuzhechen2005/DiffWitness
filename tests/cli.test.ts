@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { parseCli, UsageError } from '../src/cli';
+import { describe, expect, it, vi } from 'vitest';
+import { importPathFor, parseCli, UsageError } from '../src/cli';
 import type { WitnessReport } from '../src/core/types';
 import { fmtOutcome, fmtValue, jsonSafe, renderReport } from '../src/render';
 
+// compare.ts is a stub until #2 lands; a minimal stand-in keeps these tests independent of it.
+vi.mock('../src/core/compare', () => ({ sameOutcome: (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b) }));
+
+const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 const ret = (value: unknown) => ({ kind: 'return' as const, value });
 const report = (over: Partial<WitnessReport> = {}): WitnessReport => ({
   fnName: 'normalizeOrderId',
@@ -27,7 +31,7 @@ const report = (over: Partial<WitnessReport> = {}): WitnessReport => ({
 
 describe('render', () => {
   it('shows divergence, comparison, replay badge and shrink info', () => {
-    const s = renderReport(report());
+    const s = strip(renderReport(report()));
     expect(s).toContain('REPLAY');
     expect(s).toContain('✔ confirmed');
     expect(s).toContain('· same');
@@ -40,7 +44,7 @@ describe('render', () => {
   });
 
   it('says no divergence is evidence, not proof', () => {
-    const s = renderReport(report({ divergences: [], hypothesizer: 'gemma4:e4b @ http://x' }));
+    const s = strip(renderReport(report({ divergences: [], hypothesizer: 'gemma4:e4b @ http://x' })));
     expect(s).toContain('No divergence found (this is evidence, not proof of equivalence).');
     expect(s).not.toContain('REPLAY');
   });
@@ -73,5 +77,13 @@ describe('parseCli', () => {
     [['a.ts', 'b.ts', '--wat']],
   ])('rejects bad args %j', (argv) => {
     expect(() => parseCli(argv)).toThrow(UsageError);
+  });
+});
+
+describe('importPathFor', () => {
+  it('prefixes ./ for same-dir and subdir, keeps ../', () => {
+    expect(importPathFor('/p/t.test.ts', '/p/new.ts')).toBe('./new');
+    expect(importPathFor('/p/t.test.ts', '/p/src/new.ts')).toBe('./src/new');
+    expect(importPathFor('/p/tests/t.test.ts', '/p/src/new.ts')).toBe('../src/new');
   });
 });

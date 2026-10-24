@@ -1,5 +1,6 @@
 import { inspect } from 'node:util';
 import pc from 'picocolors';
+import { sameOutcome } from './core/compare';
 import type { Args, Outcome, WitnessReport } from './core/types';
 
 /** Strings quoted, -0 / NaN / undefined visible, objects on one line. */
@@ -24,10 +25,8 @@ export function jsonSafe(v: unknown): unknown {
 }
 
 export function renderReport(r: WitnessReport): string {
-  // A trial diverged iff the divergence list absorbed its args (witness() merges every diverging hypothesis).
-  const key = (a: Args) => JSON.stringify(jsonSafe(a));
-  const diverged = new Set(r.divergences.flatMap((d) => d.originalArgs.map(key)));
-  const hits = r.trials.filter((t) => diverged.has(key(t.hypothesis.args))).length;
+  const hit = (t: WitnessReport['trials'][number]) => !sameOutcome(t.pair.old, t.pair.new);
+  const hits = r.trials.filter(hit).length;
   const replay = /replay/i.test(r.hypothesizer);
 
   const out: string[] = [
@@ -38,7 +37,7 @@ export function renderReport(r: WitnessReport): string {
     pc.bold('Hypotheses'),
   ];
   for (const t of r.trials) {
-    const mark = diverged.has(key(t.hypothesis.args)) ? pc.bold(pc.red('✔ confirmed')) : pc.dim('· same     ');
+    const mark = hit(t) ? pc.bold(pc.red('✔ confirmed')) : pc.dim('· same     ');
     out.push(`  ${mark}  ${fmtArgs(t.hypothesis.args)}  ${pc.dim(t.hypothesis.reason)}`);
   }
   out.push('');
