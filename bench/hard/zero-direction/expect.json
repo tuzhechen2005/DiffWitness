@@ -1,0 +1,6 @@
+{
+  "silent": [
+    -0.125
+  ],
+  "note": "The fallback replaces negative zero from a small negative measurement with positive zero."
+}

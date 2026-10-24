@@ -1,0 +1,7 @@
+{
+  "silent": [
+    "archived",
+    true
+  ],
+  "note": "The owner fast path bypasses the archived-document read-only rule."
+}

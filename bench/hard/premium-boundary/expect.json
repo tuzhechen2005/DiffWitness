@@ -1,0 +1,11 @@
+{
+  "silent": [
+    {
+      "plan": "premium",
+      "country": "US",
+      "subtotal": 10000,
+      "renewed": true
+    }
+  ],
+  "note": "A renewed US premium order exactly at the threshold loses its shipping credit."
+}

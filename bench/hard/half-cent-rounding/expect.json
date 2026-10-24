@@ -1,0 +1,6 @@
+{
+  "silent": [
+    2.675
+  ],
+  "note": "Binary floating-point and intermediate multiplication round the half-cent amount differently."
+}

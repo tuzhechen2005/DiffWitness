@@ -1,0 +1,9 @@
+{
+  "silent": [
+    [
+      "ABC-1234",
+      "XYZ-9876"
+    ]
+  ],
+  "note": "A reused global regex carries lastIndex and skips the second valid SKU."
+}

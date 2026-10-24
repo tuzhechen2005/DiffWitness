@@ -1,0 +1,10 @@
+{
+  "silent": [
+    [
+      0.1,
+      0.2
+    ],
+    0.3
+  ],
+  "note": "Exact equality rejects a balanced decimal sum because 0.1 + 0.2 is not exactly 0.3."
+}
