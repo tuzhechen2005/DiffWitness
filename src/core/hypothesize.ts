@@ -82,7 +82,7 @@ function readFixtures(file: string, kind: 'replay' | 'record'): Fixtures {
  * Validates model output: drops items whose args are not a JSON array; caps at 8.
  * If `recordTo` is set, appends each round's validated hypotheses to that fixture file.
  */
-export function ollamaHypothesizer(opts: { url: string; model: string; recordTo?: string }): Hypothesizer {
+export function ollamaHypothesizer(opts: { url: string; model: string; recordTo?: string; timeoutMs?: number }): Hypothesizer {
   return {
     label: `${opts.model} @ ${opts.url}`,
     async propose(input) {
@@ -100,7 +100,7 @@ export function ollamaHypothesizer(opts: { url: string; model: string; recordTo?
               messages: [{ role: 'user', content: buildPrompt(input) }],
               options: { temperature: 0.2 },
             }),
-            signal: AbortSignal.timeout(120_000),
+            signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
           });
           if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
           content = ((await res.json()) as { message?: { content?: unknown } }).message?.content;
@@ -154,11 +154,12 @@ export function replayHypothesizer(fixtureFile: string): Hypothesizer {
  * else Ollama with OLLAMA_URL ?? http://localhost:11434, DIFFWITNESS_MODEL ?? gemma4:e4b,
  * recording to DIFFWITNESS_RECORD if set. Issue #4.
  */
-export function hypothesizerFromEnv(env: NodeJS.ProcessEnv = process.env, opts: { replay?: boolean } = {}): Hypothesizer {
+export function hypothesizerFromEnv(env: NodeJS.ProcessEnv = process.env, opts: { replay?: boolean; timeoutMs?: number } = {}): Hypothesizer {
   if (opts.replay || env.DIFFWITNESS_REPLAY === '1') return replayHypothesizer(env.DIFFWITNESS_FIXTURES ?? fileURLToPath(new URL('../../fixtures/gemma-recorded.json', import.meta.url)));
   return ollamaHypothesizer({
     url: env.OLLAMA_URL ?? 'http://localhost:11434',
     model: env.DIFFWITNESS_MODEL ?? 'gemma4:e4b',
     recordTo: env.DIFFWITNESS_RECORD,
+    timeoutMs: opts.timeoutMs,
   });
 }

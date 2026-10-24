@@ -8,12 +8,15 @@ import { bundleFunction, withRevision } from './core/bundle';
 import { exportVitest } from './core/exportTests';
 import { changedFunctions, git, resolveRev } from './core/git';
 import { hypothesizerFromEnv } from './core/hypothesize';
+import { hookCommand } from './hook';
 import type { Divergence, Hypothesizer, Label, LabeledDivergence, WitnessReport } from './core/types';
 import { witness } from './core/witness';
 import { fmtArgs, jsonSafe, renderReport } from './render';
 
 export const USAGE = 'usage: diffwitness <old.ts> <new.ts> [--label bug|intended] [--json] [--replay] [--out file] [--runs n] [--fn name]\n' +
-  '       diffwitness --git <base>[..<head>] [--path file] [--fn name] [--label bug|intended] [--json] [--replay] [--runs n]';
+  '       diffwitness --git <base>[..<head>] [--path file] [--fn name] [--label bug|intended] [--json] [--replay] [--runs n]\n' +
+  '       diffwitness hook install [--force] [--strict] | hook uninstall\n' +
+  '       (the hook checks staged vs HEAD; with git commit --amend, HEAD is the commit being amended)';
 
 /** Relative import specifier from the test file to the new source file, without `.ts`. */
 export function importPathFor(out: string, newFile: string): string {
@@ -121,6 +124,7 @@ async function gitMain(o: ReturnType<typeof parseCli>, range: { base: string; he
 }
 
 async function main(argv: string[]) {
+  if (argv[0] === 'hook') return hookCommand(argv.slice(1));
   const o = parseCli(argv);
   const hypothesizer = hypothesizerFromEnv(process.env, { replay: o.replay });
   if (o.git) return gitMain(o, o.git, hypothesizer);
