@@ -29,8 +29,8 @@ const lines = [
   `Hypothesizer: ${hypothesizer.label}. Runs per case: ${runs}. Random seed: 1 (reset per case). Cases: ${values.cases}. Coverage feedback: ${process.env.DIFFWITNESS_NO_COVERAGE === "1" ? "off" : "on"}.`,
   ...(process.env.DIFFWITNESS_REPLAY === '1' ? ['', 'Replay validation only; these are not live model measurements. Missing fixture keys yield no hypotheses.'] : []),
   '',
-  '| case | model silent hit rate | random silent hits / R | model avg seconds |',
-  '| --- | --- | --- | --- |',
+  '| case | model silent hit rate | random silent hits / R | model avg seconds | model errors |',
+  '| --- | --- | --- | --- | --- |',
 ];
 let fromTypes = 0;
 for (const name of readdirSync(values.cases!).sort()) {
@@ -39,10 +39,17 @@ for (const name of readdirSync(values.cases!).sort()) {
   const newFile = join(dir, 'new.ts');
   const expected = JSON.parse(readFileSync(join(dir, 'expect.json'), 'utf8')) as { silent: Args };
   let hits = 0;
+  let errors = 0;
   const start = performance.now();
   for (let i = 0; i < runs; i++) {
-    const report = await witness({ oldFile, newFile, hypothesizer, baselineRuns: 0, coverage: process.env.DIFFWITNESS_NO_COVERAGE !== '1' });
-    if (report.divergences.some(d => silent(d.pair))) hits++;
+    const once = () => witness({ oldFile, newFile, hypothesizer, baselineRuns: 0, coverage: process.env.DIFFWITNESS_NO_COVERAGE !== '1' });
+    // A flaky model server must not abort the whole benchmark: retry once, then count the run as an error (not a miss).
+    const report = await once().catch(async () => { await new Promise(r => setTimeout(r, 3000)); return once(); }).catch((e) => {
+      errors++;
+      console.error(`${name} run ${i + 1}: ${e instanceof Error ? e.message : e}`);
+      return undefined;
+    });
+    if (report?.divergences.some(d => silent(d.pair))) hits++;
   }
   const seconds = (performance.now() - start) / 1000 / runs;
   const newFn = await loadFunction(newFile);
@@ -60,7 +67,7 @@ for (const name of readdirSync(values.cases!).sort()) {
   } finally {
     await runner.close();
   }
-  lines.push(`| ${name} | ${hits}/${runs} (${(hits / runs * 100).toFixed(1)}%) | ${randomHits} / ${random} | ${seconds.toFixed(3)} |`);
+  lines.push(`| ${name} | ${hits}/${runs} (${(hits / runs * 100).toFixed(1)}%) | ${randomHits} / ${random} | ${seconds.toFixed(3)} | ${errors} |`);
 }
 lines.splice(lines.findIndex(l => l.startsWith('| case')), 0, `Random baseline shapes: declared parameter types for ${fromTypes} of ${readdirSync(values.cases!).length} cases, the expected silent args otherwise.`, '');
 lines.push('', 'Model timing includes the complete witness pipeline (loading, hypotheses, execution, and shrinking); the separate random baseline is excluded.', '');
