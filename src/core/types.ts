@@ -1,4 +1,5 @@
 // Shared contracts. Every module codes against these; change them only via the integrator.
+import type { Param } from './signature';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 /** Positional arguments for one call. Inputs are JSON-only by design. */
@@ -11,6 +12,8 @@ export interface LoadedFn {
   source: string;
   /** Type-stripped CommonJS that assigns `exports[name]`. Contains no imports. */
   code: string;
+  /** Parameter types from the TypeScript signature; set by witness. */
+  params?: Param[];
 }
 
 /** What one call did. Return values may be any structured-cloneable value. */
@@ -82,6 +85,8 @@ export interface BaselineResult {
   firstDivergentArgs?: Args;
   /** Distinct minimal repros from shrinking the first 20 divergent random runs. */
   repros: Args[];
+  /** Where the random args came from: the declared parameter types, or the first hypothesis' args. */
+  shapeFrom?: 'types' | 'example';
 }
 
 export interface WitnessReport {
@@ -92,8 +97,12 @@ export interface WitnessReport {
   divergences: Divergence[];
   /** Naive random fuzzing over the shape of the first hypothesis' args; absent if no hypotheses. */
   baseline?: BaselineResult;
+  /** Hypotheses dropped before running because their args violate the declared parameter types. */
+  droppedForType?: number;
   /** Branches executed by the model's inputs, out of all instrumented branches. */
   coverage?: { old: { covered: number; total: number }; new: { covered: number; total: number } };
+  /** Set when every trial threw the same error name on both sides: the function never ran normally. */
+  neverRan?: { name: string; message: string };
 }
 
 export type Label = 'bug' | 'intended';

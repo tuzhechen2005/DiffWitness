@@ -42,7 +42,9 @@ export function renderReport(r: WitnessReport): string {
   }
   out.push('');
 
-  if (r.divergences.length === 0) {
+  if (r.neverRan) {
+    out.push(pc.bold(pc.yellow(`Both versions threw ${r.neverRan.name}: ${r.neverRan.message} on every input — the function never ran; results are not evidence of equivalence.`)));
+  } else if (r.divergences.length === 0) {
     out.push(pc.green('No divergence found (this is evidence, not proof of equivalence).'));
   } else {
     // witness() orders each cluster's simplest repro first; a divergence without a cluster stands alone.

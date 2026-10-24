@@ -6,6 +6,7 @@ import { sameOutcome } from '../src/core/compare';
 import { createRunner } from '../src/core/executor';
 import { hypothesizerFromEnv } from '../src/core/hypothesize';
 import { loadFunction } from '../src/core/loader';
+import { paramsOf } from '../src/core/signature';
 import type { Args, Pair } from '../src/core/types';
 import { witness } from '../src/core/witness';
 
@@ -31,6 +32,7 @@ const lines = [
   '| case | model silent hit rate | random silent hits / R | model avg seconds |',
   '| --- | --- | --- | --- |',
 ];
+let fromTypes = 0;
 for (const name of readdirSync(values.cases!).sort()) {
   const dir = join(values.cases!, name);
   const oldFile = join(dir, 'old.ts');
@@ -43,10 +45,14 @@ for (const name of readdirSync(values.cases!).sort()) {
     if (report.divergences.some(d => silent(d.pair))) hits++;
   }
   const seconds = (performance.now() - start) / 1000 / runs;
-  const runner = await createRunner(await loadFunction(oldFile), await loadFunction(newFile));
+  const newFn = await loadFunction(newFile);
+  const params = paramsOf(newFn);
+  const typed = !!params?.length && params.every(p => p.shape);
+  if (typed) fromTypes++;
+  const runner = await createRunner(await loadFunction(oldFile), newFn);
   let randomHits = 0;
   try {
-    const shapes = inferShape(expected.silent);
+    const shapes = typed ? params!.map(p => p.shape!) : inferShape(expected.silent);
     const rng = mulberry32(1);
     for (let i = 0; i < random; i++) {
       if (silent(await runner.run(randomArgs(shapes, rng)))) randomHits++;
@@ -56,6 +62,7 @@ for (const name of readdirSync(values.cases!).sort()) {
   }
   lines.push(`| ${name} | ${hits}/${runs} (${(hits / runs * 100).toFixed(1)}%) | ${randomHits} / ${random} | ${seconds.toFixed(3)} |`);
 }
+lines.splice(lines.findIndex(l => l.startsWith('| case')), 0, `Random baseline shapes: declared parameter types for ${fromTypes} of ${readdirSync(values.cases!).length} cases, the expected silent args otherwise.`, '');
 lines.push('', 'Model timing includes the complete witness pipeline (loading, hypotheses, execution, and shrinking); the separate random baseline is excluded.', '');
 const markdown = lines.join('\n');
 console.log(markdown);

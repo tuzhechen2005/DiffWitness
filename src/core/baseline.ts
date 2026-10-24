@@ -7,7 +7,9 @@ export type Shape =
   | 'boolean'
   | 'null'
   | { array: Shape }
-  | { object: Record<string, Shape> };
+  | { object: Record<string, Shape>; optional?: string[] }
+  | { literal: string | number | boolean }
+  | { union: Shape[] };
 
 /** Shape of each positional arg. Arrays take the shape of their first element ('null' if empty). Issue #3. */
 export function inferShape(args: Args): Shape[] {
@@ -30,6 +32,8 @@ export function inferShape(args: Args): Shape[] {
 export function randomArgs(shapes: Shape[], rng: () => number): Args {
   const generate = (shape: Shape): Json => {
     if (shape === 'null') return null;
+    if (typeof shape === 'object' && 'literal' in shape) return shape.literal;
+    if (typeof shape === 'object' && 'union' in shape) return generate(shape.union[Math.floor(rng() * shape.union.length)]);
     if (shape === 'boolean') return rng() < 0.5;
     if (shape === 'number') {
       const integer = rng() < 0.5;
@@ -40,7 +44,9 @@ export function randomArgs(shapes: Shape[], rng: () => number): Args {
       return Array.from({ length: Math.floor(rng() * 11) }, () => String.fromCharCode(32 + Math.floor(rng() * 95))).join('');
     }
     if ('array' in shape) return Array.from({ length: Math.floor(rng() * 6) }, () => generate(shape.array));
-    return Object.fromEntries(Object.entries(shape.object).map(([key, item]) => [key, generate(item)]));
+    const entries = Object.entries(shape.object).flatMap(([key, item]): [string, Json][] =>
+      shape.optional?.includes(key) && rng() < 0.3 ? [] : [[key, generate(item)]]);
+    return Object.fromEntries(entries);
   };
   return shapes.map(generate);
 }

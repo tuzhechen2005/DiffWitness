@@ -16,11 +16,13 @@ export interface ChangedFn {
 }
 
 /** Text of each top-level exported function (declarations and `export const f = () => ...` / function expressions). */
-export function exportedFunctions(source: string, file = 'x.ts'): Map<string, string> {
+export function exportedFunctions(source: string, file = 'x.ts'): { fns: Map<string, string>; hasDefault: boolean } {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
   const out = new Map<string, string>();
+  let hasDefault = false;
   for (const stmt of sf.statements) {
     const mods = ts.canHaveModifiers(stmt) ? (ts.getModifiers(stmt) ?? []) : [];
+    if (ts.isExportAssignment(stmt) || mods.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword)) hasDefault = true;
     if (!mods.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) || mods.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword)) continue;
     if (ts.isFunctionDeclaration(stmt) && stmt.name && stmt.body) out.set(stmt.name.text, stmt.getText(sf));
     if (ts.isVariableStatement(stmt)) {
@@ -30,12 +32,22 @@ export function exportedFunctions(source: string, file = 'x.ts'): Map<string, st
       }
     }
   }
-  return out;
+  return { fns: out, hasDefault };
+}
+
+/** Resolves `rev` to a commit hash; refuses anything git could read as an option. */
+export function resolveRev(repo: string, rev: string): string {
+  if (rev.startsWith('-')) throw new Error(`invalid revision "${rev}": revisions cannot start with "-"`);
+  try {
+    return git(repo, 'rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{commit}`).trim();
+  } catch {
+    throw new Error(`unknown revision "${rev}" in ${repo}`);
+  }
 }
 
 /**
  * Exported functions whose own text changed between `base` and `head` (undefined = working tree).
- * Functions only on one side are skipped and reported in `notes`.
+ * `base` and `head` must be resolved with resolveRev. Functions only on one side, and default exports, are skipped and reported in `notes`.
  */
 export function changedFunctions(repo: string, base: string, head?: string, filter: { path?: string; fn?: string } = {}) {
   const notes: string[] = [];
@@ -47,7 +59,9 @@ export function changedFunctions(repo: string, base: string, head?: string, filt
   for (const path of files) {
     const oldText = git(repo, 'show', `${base}:${path}`);
     const newText = head ? git(repo, 'show', `${head}:${path}`) : readFileSync(join(repo, path), 'utf8');
-    const [olds, news] = [exportedFunctions(oldText, path), exportedFunctions(newText, path)];
+    const [o, n] = [exportedFunctions(oldText, path), exportedFunctions(newText, path)];
+    const [olds, news] = [o.fns, n.fns];
+    if (n.hasDefault) notes.push(`${path}: default export skipped; only named exports are checked`);
     for (const [name, oldSource] of olds) {
       if (filter.fn !== undefined && name !== filter.fn) continue;
       const newSource = news.get(name);

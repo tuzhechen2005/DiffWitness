@@ -12,15 +12,30 @@ export async function withRevision<T>(repo: string, rev: string | undefined, use
   if (rev === undefined) return use(repo);
   const tmp = mkdtempSync(join(tmpdir(), 'diffwitness-'));
   const dir = join(tmp, 'wt');
-  git(repo, 'worktree', 'add', '--detach', dir, rev);
-  try {
-    return await use(dir);
-  } finally {
+  const cleanup = (worktree: boolean) => {
     try {
-      git(repo, 'worktree', 'remove', '--force', dir);
+      if (worktree) git(repo, 'worktree', 'remove', '--force', dir);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
+  };
+  try {
+    git(repo, 'worktree', 'add', '--detach', dir, rev);
+  } catch (e) {
+    cleanup(false);
+    throw e;
+  }
+  // Ctrl-C would otherwise leave the worktree registered in the user's repo.
+  const onInt = () => {
+    cleanup(true);
+    process.exit(130);
+  };
+  process.once('SIGINT', onInt);
+  try {
+    return await use(dir);
+  } finally {
+    process.off('SIGINT', onInt);
+    cleanup(true);
   }
 }
 
@@ -30,7 +45,7 @@ export async function withRevision<T>(repo: string, rev: string | undefined, use
  * Packages resolve from `repo`'s node_modules. `source` is the function's own text, used for prompts and replay keys.
  */
 export async function bundleFunction(dir: string, path: string, name: string, source: string, repo: string): Promise<{ fn: LoadedFn; branches: Branch[] }> {
-  const entry = realpathSync(join(dir, path));
+  const [real, entry] = [realpathSync(dir), realpathSync(join(dir, path))];
   const fileText = readFileSync(entry, 'utf8');
   const cov = instrument({ name, source: fileText, code: '' });
   const plugin: Plugin = {
@@ -38,7 +53,7 @@ export async function bundleFunction(dir: string, path: string, name: string, so
     setup(b) {
       b.onResolve({ filter: /.*/ }, (a) => {
         if (!isBuiltin(a.path)) return undefined;
-        const by = a.importer.includes('node_modules/') ? a.importer.split('node_modules/').pop() : relative(dir, a.importer);
+        const by = a.importer.includes('node_modules/') ? a.importer.split('node_modules/').pop() : relative(real, a.importer);
         return { errors: [{ text: `${path} pulls in the Node builtin "${a.path}" (imported by ${by}); DiffWitness runs functions without require, so only pure code can be compared` }] };
       });
       // instrument() emits CommonJS with require() calls, which esbuild still bundles.

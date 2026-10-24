@@ -6,7 +6,7 @@ import { parseArgs } from 'node:util';
 import pc from 'picocolors';
 import { bundleFunction, withRevision } from './core/bundle';
 import { exportVitest } from './core/exportTests';
-import { changedFunctions, git } from './core/git';
+import { changedFunctions, git, resolveRev } from './core/git';
 import { hypothesizerFromEnv } from './core/hypothesize';
 import type { Divergence, Hypothesizer, Label, LabeledDivergence, WitnessReport } from './core/types';
 import { witness } from './core/witness';
@@ -33,7 +33,7 @@ export function parseCli(argv: string[]) {
         label: { type: 'string' },
         json: { type: 'boolean' },
         replay: { type: 'boolean' },
-        out: { type: 'string', default: 'diffwitness.test.ts' },
+        out: { type: 'string' },
         runs: { type: 'string' },
         fn: { type: 'string' },
         git: { type: 'string' },
@@ -49,12 +49,14 @@ export function parseCli(argv: string[]) {
   if (values.path !== undefined && values.git === undefined) throw new UsageError('--path only works with --git');
   const [base, head] = values.git?.split('..') ?? [];
   if (values.git !== undefined && !base) throw new UsageError('--git needs a base revision, e.g. --git HEAD~1 or --git main..feature');
+  if ([base, head].some((r) => r?.startsWith('-'))) throw new UsageError('--git revisions cannot start with "-"');
+  if (values.git !== undefined && values.out !== undefined) throw new UsageError('--out does not apply to --git: each function gets diffwitness.<path>.<fn>.test.ts');
   if (values.label !== undefined && values.label !== 'bug' && values.label !== 'intended') throw new UsageError('--label must be bug or intended');
   const runs = values.runs === undefined ? undefined : Number(values.runs);
   if (runs !== undefined && !(Number.isInteger(runs) && runs > 0)) throw new UsageError('--runs must be a positive integer');
   return {
     oldFile: positionals[0], newFile: positionals[1], label: values.label as Label | undefined, json: !!values.json, replay: !!values.replay,
-    out: values.out as string, runs, fn: values.fn, git: values.git === undefined ? undefined : { base, head: head || undefined }, path: values.path,
+    out: values.out ?? 'diffwitness.test.ts', runs, fn: values.fn, git: values.git === undefined ? undefined : { base, head: head || undefined }, path: values.path,
   };
 }
 
@@ -84,15 +86,19 @@ async function exportReport(report: WitnessReport, label: Label | undefined, out
   console.log(`\nWrote ${items.length} regression test(s) to ${outFile}`);
 }
 
+/** Test file name for one function in git mode; includes the path so same-named functions never collide. */
+export const gitOutFile = (path: string, fn: string) => `diffwitness.${path.replace(/\.ts$/, '').replace(/[\\/]/g, '_')}.${fn}.test.ts`;
+
 async function gitMain(o: ReturnType<typeof parseCli>, range: { base: string; head?: string }, hypothesizer: Hypothesizer) {
   const repo = git(process.cwd(), 'rev-parse', '--show-toplevel').trim();
   const path = o.path === undefined ? undefined : relative(repo, resolve(o.path)).replace(/\\/g, '/');
-  const { fns, notes } = changedFunctions(repo, range.base, range.head, { path, fn: o.fn });
+  const [base, head] = [resolveRev(repo, range.base), range.head === undefined ? undefined : resolveRev(repo, range.head)];
+  const { fns, notes } = changedFunctions(repo, base, head, { path, fn: o.fn });
   for (const n of notes) console.error(pc.dim(`note: ${n}`));
   const bundleAll = (rev: string | undefined, side: 'oldSource' | 'newSource') =>
     withRevision(repo, rev, (dir) => Promise.allSettled(fns.map((f) => bundleFunction(dir, f.path, f.name, f[side], repo))));
-  const olds = await bundleAll(range.base, 'oldSource');
-  const news = await bundleAll(range.head, 'newSource');
+  const olds = await bundleAll(base, 'oldSource');
+  const news = await bundleAll(head, 'newSource');
 
   const results: { path: string; report: WitnessReport }[] = [];
   for (const [i, f] of fns.entries()) {
@@ -106,11 +112,12 @@ async function gitMain(o: ReturnType<typeof parseCli>, range: { base: string; he
     results.push({ path: f.path, report });
     if (o.json) continue;
     console.log(`${pc.bold(pc.cyan(`━━ ${f.path}:${f.name}`))}\n${renderReport(report)}\n`);
-    await exportReport(report, o.label, `diffwitness.${f.name}.test.ts`, join(repo, f.path));
+    await exportReport(report, o.label, gitOutFile(f.path, f.name), join(repo, f.path));
   }
   if (o.json) return console.log(JSON.stringify(jsonSafe(results), null, 2));
   const diverged = results.filter((r) => r.report.divergences.length).length;
-  console.log(pc.bold(`${results.length} changed function(s) checked, ${diverged} with divergences`));
+  const never = results.filter((r) => r.report.neverRan).length;
+  console.log(pc.bold(`${results.length} changed function(s) checked, ${diverged} with divergences${never ? `, ${never} never ran normally` : ''}`));
 }
 
 async function main(argv: string[]) {

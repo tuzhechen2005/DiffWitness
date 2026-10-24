@@ -3,6 +3,7 @@ import { sameOutcome } from './compare';
 import { instrument, type Branch } from './coverage';
 import { createRunner } from './executor';
 import { loadFunction } from './loader';
+import { conforms, paramsOf, type Param } from './signature';
 import { shrink } from './shrink';
 import type { Args, BaselineResult, Divergence, Hypothesizer, LoadedFn, Pair, ProposeInput, Runner, Trial, WitnessReport } from './types';
 
@@ -28,6 +29,8 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
   const load = async (pre: WitnessOptions['old'], file?: string) => pre ?? instrument(await loadFunction(file ?? '', o.fn));
   const [oldCov, newCov] = await Promise.all([load(o.old, o.oldFile), load(o.new, o.newFile)]);
   const [oldFn, newFn] = [oldCov.fn, newCov.fn];
+  newFn.params = paramsOf(newFn);
+  let droppedForType = 0;
   const runner = await createRunner(oldCov.fn, newCov.fn, { timeoutMs: o.timeoutMs ?? 1000 });
   try {
     const trials: Trial[] = [];
@@ -42,6 +45,7 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
       if (round === 2 && useCov) input.uncovered = uncovered();
       const hyps = await o.hypothesizer.propose(input);
       for (const h of hyps.slice(0, 8)) {
+        if (newFn.params && !conforms(h.args, newFn.params)) { droppedForType++; continue; }
         const pair = await runner.run(h.args);
         if ([pair.old, pair.new].some((x) => x.kind === 'throw' && x.name === 'DiffWitnessAsync'))
           throw new Error('async functions are not supported: DiffWitness compares synchronous pure functions');
@@ -79,7 +83,7 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
     }
 
     const first = trials[0]?.hypothesis.args;
-    const baseline = first && (await runBaseline(runner, first, o.baselineRuns ?? 2000, o.seed ?? 1));
+    const baseline = first && (await runBaseline(runner, first, newFn.params, o.baselineRuns ?? 2000, o.seed ?? 1));
     const found = [...byArgs.values()];
     // Without branches every divergence shares the empty path, so grouping would say nothing.
     const divergences = oldCov.branches.length + newCov.branches.length ? cluster(found) : found;
@@ -87,7 +91,11 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
       old: { covered: oldCov.branches.filter((b) => hit.old.has(b.id)).length, total: oldCov.branches.length },
       new: { covered: newCov.branches.filter((b) => hit.new.has(b.id)).length, total: newCov.branches.length },
     };
-    return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences, baseline, coverage };
+    // e.g. a reference to `process` or a missing global: identical throws everywhere look like equivalence but prove nothing.
+    const t0 = trials[0]?.pair.old;
+    const neverRan = t0?.kind === 'throw' && trials.every(({ pair: p }) => p.old.kind === 'throw' && p.new.kind === 'throw' && p.old.name === t0.name && p.new.name === t0.name)
+      ? { name: t0.name, message: t0.message } : undefined;
+    return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences, baseline, coverage, ...(droppedForType && { droppedForType }), ...(neverRan && { neverRan }) };
   } finally {
     await runner.close();
   }
@@ -108,10 +116,11 @@ export function cluster(ds: Divergence[]): Divergence[] {
   return [...groups.values()].flatMap((g, i) => g.sort(simpler).map((d) => ({ ...d, cluster: i })));
 }
 
-async function runBaseline(runner: Runner, example: Args, runs: number, seed: number): Promise<BaselineResult> {
-  const shapes = inferShape(example);
+async function runBaseline(runner: Runner, example: Args, params: Param[] | undefined, runs: number, seed: number): Promise<BaselineResult> {
+  const typed = !!params?.length && params.every((p) => p.shape);
+  const shapes = typed ? params.map((p) => p.shape!) : inferShape(example);
   const rng = mulberry32(seed);
-  const result: BaselineResult = { runs, divergent: 0, silent: 0, repros: [] };
+  const result: BaselineResult = { runs, divergent: 0, silent: 0, repros: [], shapeFrom: typed ? 'types' : 'example' };
   const seen = new Set<string>();
   for (let i = 0; i < runs; i++) {
     const args = randomArgs(shapes, rng);
