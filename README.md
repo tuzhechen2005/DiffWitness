@@ -42,7 +42,7 @@ ollama pull gemma4:e4b
 npm run diffwitness -- old.ts new.ts
 ```
 
-Each input file must be self-contained, have no imports, and export exactly one named synchronous function (`export function` or an exported arrow/function expression). Supply positional arguments through model hypotheses or replay fixtures. To try a supplied example without Ollama:
+Each input file must be self-contained and have no imports. By default it must export exactly one named synchronous function (`export function` or an exported arrow/function expression). With `--fn name`, select that exported function in both files; other exports and local helper functions/constants are allowed and the whole file is retained. Supply positional arguments through model hypotheses or replay fixtures. To try a supplied example without Ollama:
 
 ```sh
 npm run diffwitness -- examples/order-id/old.ts examples/order-id/new.ts --replay --label bug --out /tmp/x.test.ts
@@ -54,6 +54,7 @@ npm run diffwitness -- examples/order-id/old.ts examples/order-id/new.ts --repla
 | `--json` | Print the report as JSON and return before labeling or export. Special numbers and undefined are represented as strings. |
 | `--replay` | Read saved hypotheses instead of calling Ollama. |
 | `--out file` | Output test path; default `diffwitness.test.ts`. Its parent directory must exist. |
+| `--fn name` | Select a named exported function in both files. Local helpers/constants and other exports are allowed; imports remain rejected. |
 | `--runs n` | Positive integer random-baseline run count; default 2000. |
 
 | Environment variable | Behavior / default |
@@ -68,7 +69,7 @@ Default replay uses recorded Gemma 4 e4b replies from `fixtures/gemma-recorded.j
 
 ## Sample terminal output
 
-The command above produced this output with colors disabled. These replay results use recorded Gemma 4 e4b replies, not a fresh live model run. The absolute fixture path reflects this checkout. Hypothesis explanations are model output and may be inaccurate; execution determines which differences are confirmed. The report's divergence counts include exceptions as well as differing return values.
+The command above produced this output with colors disabled. These replay results use recorded Gemma 4 e4b replies, not a fresh live model run. The checkout path is normalized to `/path/to/DiffWitness`. Hypothesis explanations are model output and may be inaccurate; execution determines which differences are confirmed. The report's divergence counts include exceptions as well as differing return values.
 
 ```text
 > diffwitness@0.1.0 diffwitness
@@ -88,33 +89,25 @@ Hypotheses
   ✔ confirmed  ("ORDER")  OLD accepts purely alphabetic IDs, but NEW fails because it cannot parse letters as a number.
   ✔ confirmed  ("123.45")  OLD accepts IDs containing punctuation (if it's a hyphen), but NEW fails if the punctuation is not a digit or sign.
 
-Confirmed divergences: 5
+Confirmed divergences: 5 in 3 branch paths
 
-  #1  normalizeOrderId("O")
-      old → "O"
-      new → throws Error: invalid order id: O
-      model args: ("ORD-123") | ("ORDER")
-      shrunk in 7 steps; why: OLD accepts alphanumeric IDs, while NEW requires the input to be parsable as a pure integer. / OLD accepts purely alphabetic IDs, but NEW fails because it cannot parse letters as a number.
-
-  #2  normalizeOrderId("A")
+  #1  normalizeOrderId("A")
       old → "A"
       new → throws Error: invalid order id: A
       model args: ("A123") | ("ABC-XYZ")
       shrunk in 5 steps; why: OLD accepts IDs containing letters, while NEW fails because the string does not start with a digit. / OLD accepts IDs containing letters and hyphens, which NEW rejects as non-numeric.
+      +1 more on the same branch path (may still be different bugs):
+        ("O")  old → "O"  new → throws Error: invalid order id: O
 
-  #3  normalizeOrderId("1A")
-      old → "1A"
-      new → "1"
-      model args: ("123A45")
-      shrunk in 15 steps; why: SILENT DIVERGENCE: OLD accepts the full string, but NEW truncates the string at the first non-digit character.
-
-  #4  normalizeOrderId("00")
+  #2  normalizeOrderId("00")
       old → "00"
       new → "0"
       model args: ("00123")
       shrunk in 6 steps; why: SILENT DIVERGENCE: OLD preserves leading zeros, but NEW (via parseInt) strips them.
+      +1 more on the same branch path (may still be different bugs):
+        ("1A")  old → "1A"  new → "1"
 
-  #5  normalizeOrderId("1.")
+  #3  normalizeOrderId("1.")
       old → throws Error: invalid order id: 1.
       new → "1"
       model args: ("123.45")
@@ -122,8 +115,9 @@ Confirmed divergences: 5
 
 Random fuzzing: 477 of 2000 runs diverged, 32 silent (both returned); sample shrank to 18 distinct repros
 Model:          7 of 8 hypotheses diverged, 2 silent, 5 distinct repros
+Coverage:       old 2/2, new 2/2 branches reached by model inputs
   random repros: ("N") ("9/") ("-") ("6=") ("T") ("e") ("X") ("W") ("1T") ("5:") …
-  model repros:  ("O") ("A") ("1A") ("00") ("1.")
+  model repros:  ("A") ("O") ("00") ("1A") ("1.")
 
 Wrote 5 regression test(s) to /tmp/x.test.ts
 ```
@@ -131,48 +125,55 @@ Wrote 5 regression test(s) to /tmp/x.test.ts
 ## How it works
 
 ```text
-old.ts + new.ts -> loader -> model hypotheses -> isolated execution
-                                ^                     |
-                                |               outcome comparison
-                                |                     |
-                     round 2: actual outcomes         v
-                     if no silent divergence      shrinking
-                                                      |
-                                                   labeling
-                                                      |
-                                                 vitest export
+old.ts + new.ts -> loader + branch instrumentation -> model hypotheses
+                                                          |
+                                                   isolated execution
+                                                          |
+            round 2: real outcomes + uncovered lines <- comparison + coverage
+                                                          |
+                                                shrinking -> clustering
+                                                          |
+                                                labeling -> vitest export
 ```
 
-The loader parses and transpiles TypeScript without executing it. The hypothesizer receives both sources and proposes up to eight JSON argument arrays per round. Each version runs with fresh arguments in a fresh VM context inside a worker, with a default one-second execution timeout. The comparator checks return values structurally (`NaN` equals itself, `0` differs from `-0`), compares thrown error names while ignoring messages, and treats two timeouts as equal.
+The loader parses and transpiles TypeScript without executing it. `src/core/coverage.ts` adds branch marks to both arms of `if` (including an implicit `else`), both arms of `?:`, the right-hand side of `&&`, `||` and `??`, each switch `case`/`default`, and `catch` blocks. It does not add marks for optional chaining, logical assignments (`&&=`, `||=`, `??=`), default parameters or loops.
 
-A silent divergence means both versions return normally and their values differ. If round one finds none, round two receives the actual outcomes of every previous trial and asks for new inputs targeting silent divergences—even if round one already found a return/throw difference. All confirmed differences are retained. Greedy shrinking tries smaller arguments while preserving divergence and the old/new outcome kinds, with at most 200 predicate calls per original divergent hypothesis. Equal shrunk argument lists are merged.
+The hypothesizer receives both original sources and proposes up to eight JSON argument arrays per round. Invalid JSON or a missing hypotheses array causes one retry with the same prompt; a second parse failure logs a warning and yields no hypotheses. Network/HTTP errors throw without retry. Recording stores only successfully parsed responses.
+
+Each version runs with fresh arguments and branch marks in a fresh VM context inside a worker, with a default one-second execution timeout. The comparator checks return values structurally (`NaN` equals itself, `0` differs from `-0`), compares thrown error names while ignoring messages, and treats two timeouts as equal.
+
+A silent divergence means both versions return normally and their values differ. With coverage feedback enabled (the default), round two runs if round one found no silent divergence **or any instrumented branch remains uncovered**. Its prompt includes the real outcomes of previous trials and up to 20 uncovered branch entries, identifying old/new side, original source line, branch kind and source text. A silent divergence alone does not stop the search when branches remain uncovered. Replay uses stored replies rather than asking a model to react to this feedback.
+
+Greedy shrinking preserves divergence and the old/new outcome kinds, with at most 200 predicate calls per original divergent hypothesis. Equal shrunk argument lists are merged. When either source has instrumented branches, distinct repros are clustered by outcome kinds plus each side's reached branch-ID set (called a branch path in the report). The simplest serialized arguments appear first in each cluster; all repros remain available for labeling and export. **One branch path can contain different bugs.** Shrinking does not preserve the original path, and clustering does not establish bug identity.
+
+The `Coverage:` line reports old/new branch marks reached by model-proposed inputs out of all instrumented marks. It excludes additional hits from shrinking and random sampling, and is omitted when neither source has marks. The random baseline counts all divergent runs and silent runs separately, then shrinks its first 20 divergent runs to report distinct repros.
 
 You label each result: `bug` means the new function should match the old outcome; `intended` pins the new outcome. Exported tests import the new function. Return outcomes use `toEqual`, throws use `toThrow` with the error name in a comment, and timeouts produce skipped tests.
 
 ## Generated test file example
 
-The recorded Gemma replay run generated the exact contents below in `/tmp/x.test.ts`, including the import path relative to that file in this checkout. The bug-labeled tests fail against the current new implementation until its behavior is corrected.
+The recorded Gemma replay run generated these tests in `/tmp/x.test.ts`. The checkout portion of the relative import is normalized to `/path/to/DiffWitness`; the actual CLI computes the import relative to the output file. These bug-labeled tests fail against the current new implementation until its behavior is corrected.
 
 ```ts
 // Generated by DiffWitness. Labels: bug = new must match old; intended = new behavior pinned.
 import { describe, it, expect } from 'vitest';
-import { normalizeOrderId } from '../workspace/DiffWitness-issue-20/examples/order-id/new';
+import { normalizeOrderId } from '../path/to/DiffWitness/examples/order-id/new';
 
 describe('normalizeOrderId (DiffWitness)', () => {
-  it("bug: normalizeOrderId(\"O\")", () => {
-    expect(normalizeOrderId("O")).toEqual("O");
-  });
-
   it("bug: normalizeOrderId(\"A\")", () => {
     expect(normalizeOrderId("A")).toEqual("A");
   });
 
-  it("bug: normalizeOrderId(\"1A\")", () => {
-    expect(normalizeOrderId("1A")).toEqual("1A");
+  it("bug: normalizeOrderId(\"O\")", () => {
+    expect(normalizeOrderId("O")).toEqual("O");
   });
 
   it("bug: normalizeOrderId(\"00\")", () => {
     expect(normalizeOrderId("00")).toEqual("00");
+  });
+
+  it("bug: normalizeOrderId(\"1A\")", () => {
+    expect(normalizeOrderId("1A")).toEqual("1A");
   });
 
   it("bug: normalizeOrderId(\"1.\")", () => {
@@ -191,6 +192,7 @@ describe('normalizeOrderId (DiffWitness)', () => {
 
 - Use pure, synchronous, self-contained functions. Promises are rejected; the tool does not model external services, I/O, or shared application state.
 - Arguments are JSON-only. Return values must cross the worker boundary via structured cloning. The comparator has no cycle detection; RegExp and Error return values are compared by enumerable properties.
+- Coverage tracks only the constructs listed above, not full language, statement or path coverage. Logical operators mark only right-hand evaluation; branch sets omit execution order and repetition. Unreachable marks can still trigger round two; the prompt lists at most 20 uncovered entries. Timeouts provide no branch hits. Full reported coverage does not prove equivalence or that all bugs were found.
 - VM isolation is not a security sandbox. Use this locally with code you trust, not as a service for running hostile submissions.
 - Live model hit rates vary between runs. Replay reproduces saved hypotheses and does not measure a live model.
 - “No divergence found” is evidence, not proof of equivalence. Candidate generation, two hypothesis rounds, bounded shrinking, and the baseline explore only part of the input space; shrinking does not guarantee a globally smallest counterexample.
@@ -202,6 +204,7 @@ describe('normalizeOrderId (DiffWitness)', () => {
 | --- | --- |
 | `src/cli.ts`, `src/render.ts` | Arguments, terminal/JSON reports, labeling, export path handling. |
 | `src/core/types.ts` | Shared argument, outcome, hypothesis, and report contracts. |
+| `src/core/coverage.ts` | TypeScript branch instrumentation and original source-line metadata. |
 | `src/core/loader.ts` | TypeScript parsing, import checks, and transpilation. |
 | `src/core/hypothesize.ts` | Ollama prompts, two-round feedback, recording, and replay. |
 | `src/core/executor.ts`, `src/core/compare.ts` | Worker/VM execution and outcome comparison. |
@@ -212,7 +215,11 @@ describe('normalizeOrderId (DiffWitness)', () => {
 | `fixtures/gemma-recorded.json` | Recorded Gemma 4 e4b replies; package-relative default replay fixture. |
 | `fixtures/replay.json` | Handwritten hypotheses used only by tests. |
 | `bin/diffwitness.mjs` | Executable entry point that registers tsx and runs the CLI. |
-| `bench/` | Ten planted-bug refactor pairs and benchmark results. |
+| `bench/cases/` | Ten planted-bug refactor pairs. |
+| `bench/hard/` | Twelve rare-edge silent-bug cases. |
+| `bench/real/` | Three adapted query-string fixes with source evidence and licenses. |
+| `bench/experiments/` | Planned destination for experiment results; create it before writing there. |
+| `demo/` | VHS tape, regeneration instructions and terminal GIF. |
 | `scripts/bench.ts` | Live hypothesis and seeded random-baseline benchmark runner. |
 | `tests/` | Automated tests. |
 | `scripts/cloud-setup.sh` | Noninteractive dependency installation. |
@@ -228,6 +235,24 @@ npx tsx scripts/bench.ts --runs-per-case 3 --random 2000
 ```
 
 The script prints a Markdown table and writes `bench/results.md`. It reports the fraction of model runs finding a silent divergence, silent hits among 2000 random inputs per case, and average witness runtime. The random baseline uses seed 1 and infers input shapes from the planted failing input; this gives random sampling useful information and favors random. Replay runs validate the script but do not measure live model performance.
+
+Additional corpora:
+
+- `bench/hard/`: 12 rare-edge cases covering Unicode, floating point, dates, precision, regex state and conditional boundaries. The seed-1 baseline measured **0/2000 silent hits for every case**, using shapes inferred from each planted input. This is a result for that sampler and seed, not proof that random testing can never find them.
+- `bench/real/`: three verified query-string fixes (separator encoding, inherited parser lookup, URL whitespace). Each `SOURCE.md` records upstream code, adaptations and MIT licensing. `old.ts` is the corrected reference and `new.ts` the affected version. `regression_commit` is the fix's parent, **not an established introducing commit**.
+
+Select a corpus with `--cases <dir>` (default `bench/cases`) and an output file with `--out <file>` (default `bench/results.md`). Create the output directory first. For live experiments with Ollama running and `DIFFWITNESS_REPLAY` unset:
+
+```sh
+mkdir -p bench/experiments
+npx tsx scripts/bench.ts --cases bench/hard --out bench/experiments/hard-coverage.md --runs-per-case 3 --random 2000
+DIFFWITNESS_NO_COVERAGE=1 npx tsx scripts/bench.ts --cases bench/hard --out bench/experiments/hard-no-feedback.md --runs-per-case 3 --random 2000
+npx tsx scripts/bench.ts --cases bench/real --out bench/experiments/real.md --runs-per-case 3 --random 2000
+```
+
+`DIFFWITNESS_NO_COVERAGE=1` is read by the benchmark script for the feedback ablation: it omits uncovered branches from the prompt and triggers round two only when no silent divergence has been found. Instrumentation, coverage collection and clustering still run. The CLI does not read this variable.
+
+<!-- EXPERIMENTS: integrator fills -->
 
 Live results, `gemma4:e4b` on an RTX 4060 laptop over LAN, 3 runs per case, 2000 random inputs per case (from [`bench/results.md`](bench/results.md)):
 
