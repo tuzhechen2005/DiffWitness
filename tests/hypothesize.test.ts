@@ -26,6 +26,10 @@ describe('replay', () => {
     expect(await h.propose({ ...input, round: 2 })).toEqual([]);
     expect(await h.propose({ ...input, old: { ...old, source: 'x' } })).toEqual([]);
   });
+
+  it('throws naming the path when the fixture file is missing', () => {
+    expect(() => replayHypothesizer('/nonexistent.json')).toThrow(/replay fixture \/nonexistent\.json is missing or unreadable/);
+  });
 });
 
 describe('ollama', () => {

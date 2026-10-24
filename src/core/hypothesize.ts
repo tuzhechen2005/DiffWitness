@@ -37,7 +37,7 @@ export function buildPrompt({ old, new: next, round, previous }: ProposeInput): 
     '',
     'Propose up to 8 inputs. Each input is a JSON array of positional arguments (JSON values only).',
     'Choose inputs where old and new would return different values, or where one throws and the other does not.',
-    'Prefer realistic, type-respecting inputs and edge cases tied to the specific code change.',
+    'Prefer realistic inputs that match the parameter types in the signature, and edge cases tied to the specific code change.',
     'For each input give a reason: one short sentence.',
   ];
   if (round === 2) {
@@ -49,7 +49,15 @@ export function buildPrompt({ old, new: next, round, previous }: ProposeInput): 
   return lines.join('\n');
 }
 
-const readFixtures = (file: string): Fixtures => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {});
+// Recording may start from a missing file; replay must not silently run on nothing.
+function readFixtures(file: string, kind: 'replay' | 'record'): Fixtures {
+  if (kind === 'record' && !existsSync(file)) return {};
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch (e) {
+    throw new Error(`${kind} fixture ${file} is missing or unreadable: ${e instanceof Error ? e.message : e}`);
+  }
+}
 
 /**
  * Asks Gemma via Ollama POST {url}/api/chat with `format` = JSON schema and stream: false. Issue #4.
@@ -96,7 +104,7 @@ export function ollamaHypothesizer(opts: { url: string; model: string; recordTo?
       }
 
       if (opts.recordTo) {
-        const fixtures = readFixtures(opts.recordTo);
+        const fixtures = readFixtures(opts.recordTo, 'record');
         const entry = (fixtures[fixtureKey(input.old, input.new)] ??= {});
         entry.source = 'model';
         (entry.rounds ??= {})[String(input.round)] = hyps.map(({ reason, args }) => ({ reason, args }));
@@ -109,7 +117,7 @@ export function ollamaHypothesizer(opts: { url: string; model: string; recordTo?
 
 /** Reads fixtures/replay.json-style file; unknown key or round -> []. Issue #4. */
 export function replayHypothesizer(fixtureFile: string): Hypothesizer {
-  const fixtures = readFixtures(fixtureFile);
+  const fixtures = readFixtures(fixtureFile, 'replay');
   return {
     label: `replay (${fixtureFile})`,
     async propose({ old, new: next, round }) {
