@@ -38,57 +38,72 @@ npm run diffwitness -- examples/order-id/old.ts examples/order-id/new.ts --repla
 | `OLLAMA_URL` | Ollama server URL; `http://localhost:11434`. |
 | `DIFFWITNESS_MODEL` | Model name; `gemma4:e4b`. |
 | `DIFFWITNESS_REPLAY` | Set to `1` to select replay, equivalent to `--replay`. |
-| `DIFFWITNESS_FIXTURES` | Replay fixture path; `fixtures/replay.json`, relative to the working directory. |
+| `DIFFWITNESS_FIXTURES` | Replay fixture override; defaults to the package's `fixtures/gemma-recorded.json`, resolved relative to the package so default replay works from any directory. A relative override is resolved from the working directory. |
 | `DIFFWITNESS_RECORD` | File to write validated live hypotheses to, keyed by the exact old/new source pair and round. Ignored in replay mode. |
 
-Replay requires a readable fixture file. A source pair or round absent from that file produces no hypotheses. For development checks, run `npm run typecheck && npm test`; tests use fixtures rather than a real model.
+Default replay uses recorded Gemma 4 e4b replies from `fixtures/gemma-recorded.json`. The handwritten `fixtures/replay.json` is used only by tests. Replay requires a readable fixture file; a source pair or round absent from it produces no hypotheses. For development checks, run `npm run typecheck && npm test`; tests use fixtures rather than a real model.
 
 ## Sample terminal output
 
-The command above produced this output with colors disabled. These are replay results from supplied hypotheses, not a measurement of live model performance. The report's divergence counts include exceptions as well as differing return values.
+The command above produced this output with colors disabled. These replay results use recorded Gemma 4 e4b replies, not a fresh live model run. The absolute fixture path reflects this checkout. Hypothesis explanations are model output and may be inaccurate; execution determines which differences are confirmed. The report's divergence counts include exceptions as well as differing return values.
 
 ```text
 > diffwitness@0.1.0 diffwitness
 > tsx src/cli.ts examples/order-id/old.ts examples/order-id/new.ts --replay --label bug --out /tmp/x.test.ts
 
 DiffWitness  normalizeOrderId
-  hypothesizer:  REPLAY  replay (fixtures/replay.json)
+  hypothesizer:  REPLAY  replay (/workspace/DiffWitness-issue-20/fixtures/gemma-recorded.json)
   rounds used:  1
 
 Hypotheses
-  ✔ confirmed  ("00128")  Leading zeros are significant in the old version but parseInt drops them
-  ✔ confirmed  ("A-12")  Alphanumeric ids pass the old regex but parseInt stops at the first letter
-  ✔ confirmed  ("12abc")  Trailing letters are kept by old, discarded by parseInt
-  · same       ("  42 ")  Surrounding whitespace is trimmed by both
-  · same       ("-5")  Negative-looking ids
+  ✔ confirmed  ("ORD-123")  OLD accepts alphanumeric IDs, while NEW requires the input to be parsable as a pure integer.
+  ✔ confirmed  ("A123")  OLD accepts IDs containing letters, while NEW fails because the string does not start with a digit.
+  ✔ confirmed  ("ABC-XYZ")  OLD accepts IDs containing letters and hyphens, which NEW rejects as non-numeric.
+  ✔ confirmed  ("123A45")  SILENT DIVERGENCE: OLD accepts the full string, but NEW truncates the string at the first non-digit character.
+  ✔ confirmed  ("00123")  SILENT DIVERGENCE: OLD preserves leading zeros, but NEW (via parseInt) strips them.
+  · same       ("-123")  OLD accepts IDs containing hyphens, but NEW fails because the hyphen is not a valid starting character for parseInt.
+  ✔ confirmed  ("ORDER")  OLD accepts purely alphabetic IDs, but NEW fails because it cannot parse letters as a number.
+  ✔ confirmed  ("123.45")  OLD accepts IDs containing punctuation (if it's a hyphen), but NEW fails if the punctuation is not a digit or sign.
 
-Confirmed divergences: 3
+Confirmed divergences: 5
 
-  #1  normalizeOrderId("00")
-      old → "00"
-      new → "0"
-      model args: ("00128")
-      shrunk in 7 steps; why: Leading zeros are significant in the old version but parseInt drops them
+  #1  normalizeOrderId("O")
+      old → "O"
+      new → throws Error: invalid order id: O
+      model args: ("ORD-123") | ("ORDER")
+      shrunk in 7 steps; why: OLD accepts alphanumeric IDs, while NEW requires the input to be parsable as a pure integer. / OLD accepts purely alphabetic IDs, but NEW fails because it cannot parse letters as a number.
 
   #2  normalizeOrderId("A")
       old → "A"
       new → throws Error: invalid order id: A
-      model args: ("A-12")
-      shrunk in 5 steps; why: Alphanumeric ids pass the old regex but parseInt stops at the first letter
+      model args: ("A123") | ("ABC-XYZ")
+      shrunk in 5 steps; why: OLD accepts IDs containing letters, while NEW fails because the string does not start with a digit. / OLD accepts IDs containing letters and hyphens, which NEW rejects as non-numeric.
 
-  #3  normalizeOrderId("1a")
+  #3  normalizeOrderId("1A")
       old → "1A"
       new → "1"
-      model args: ("12abc")
-      shrunk in 8 steps; why: Trailing letters are kept by old, discarded by parseInt
+      model args: ("123A45")
+      shrunk in 15 steps; why: SILENT DIVERGENCE: OLD accepts the full string, but NEW truncates the string at the first non-digit character.
 
-Random fuzzing: 477 of 2000 runs diverged
-Model:          3 of 5 hypotheses diverged
+  #4  normalizeOrderId("00")
+      old → "00"
+      new → "0"
+      model args: ("00123")
+      shrunk in 6 steps; why: SILENT DIVERGENCE: OLD preserves leading zeros, but NEW (via parseInt) strips them.
 
-Wrote 3 regression test(s) to /tmp/x.test.ts
+  #5  normalizeOrderId("1.")
+      old → throws Error: invalid order id: 1.
+      new → "1"
+      model args: ("123.45")
+      shrunk in 15 steps; why: OLD accepts IDs containing punctuation (if it's a hyphen), but NEW fails if the punctuation is not a digit or sign.
+
+Random fuzzing: 477 of 2000 runs diverged, 32 silent (both returned); sample shrank to 18 distinct repros
+Model:          7 of 8 hypotheses diverged, 2 silent, 5 distinct repros
+  random repros: ("N") ("9/") ("-") ("6=") ("T") ("e") ("X") ("W") ("1T") ("5:") …
+  model repros:  ("O") ("A") ("1A") ("00") ("1.")
+
+Wrote 5 regression test(s) to /tmp/x.test.ts
 ```
-
-<!-- RESULTS: integrator fills benchmark numbers -->
 
 ## How it works
 
@@ -113,27 +128,34 @@ You label each result: `bug` means the new function should match the old outcome
 
 ## Generated test file example
 
-The sample run generated the following tests. Only the import path below is adjusted for a file saved at the repository root; the actual CLI computes it relative to `--out`. These bug-labeled tests fail against the current new implementation until its behavior is corrected.
+The recorded Gemma replay run generated the exact contents below in `/tmp/x.test.ts`, including the import path relative to that file in this checkout. The bug-labeled tests fail against the current new implementation until its behavior is corrected.
 
 ```ts
 // Generated by DiffWitness. Labels: bug = new must match old; intended = new behavior pinned.
 import { describe, it, expect } from 'vitest';
-import { normalizeOrderId } from './examples/order-id/new';
+import { normalizeOrderId } from '../workspace/DiffWitness-issue-20/examples/order-id/new';
 
 describe('normalizeOrderId (DiffWitness)', () => {
-  it('bug: normalizeOrderId(\"00\")', () => {
-    expect(normalizeOrderId("00")).toEqual("00");
+  it("bug: normalizeOrderId(\"O\")", () => {
+    expect(normalizeOrderId("O")).toEqual("O");
   });
 
-  it('bug: normalizeOrderId(\"A\")', () => {
+  it("bug: normalizeOrderId(\"A\")", () => {
     expect(normalizeOrderId("A")).toEqual("A");
   });
 
-  it('bug: normalizeOrderId(\"1a\")', () => {
-    expect(normalizeOrderId("1a")).toEqual("1A");
+  it("bug: normalizeOrderId(\"1A\")", () => {
+    expect(normalizeOrderId("1A")).toEqual("1A");
+  });
+
+  it("bug: normalizeOrderId(\"00\")", () => {
+    expect(normalizeOrderId("00")).toEqual("00");
+  });
+
+  it("bug: normalizeOrderId(\"1.\")", () => {
+    expect(() => normalizeOrderId("1.")).toThrow(); // "Error"
   });
 });
-
 ```
 
 ## Design decisions
@@ -164,9 +186,27 @@ describe('normalizeOrderId (DiffWitness)', () => {
 | `src/core/witness.ts` | Pipeline orchestration. |
 | `src/core/exportTests.ts` | Vitest source generation. |
 | `examples/` | Order IDs, rounding, and equivalent email-normalization pairs. |
-| `fixtures/replay.json` | Saved example hypotheses keyed by exact sources. |
+| `fixtures/gemma-recorded.json` | Recorded Gemma 4 e4b replies; package-relative default replay fixture. |
+| `fixtures/replay.json` | Handwritten hypotheses used only by tests. |
+| `bin/diffwitness.mjs` | Executable entry point that registers tsx and runs the CLI. |
+| `bench/` | Ten planted-bug refactor pairs and benchmark results. |
+| `scripts/bench.ts` | Live hypothesis and seeded random-baseline benchmark runner. |
 | `tests/` | Automated tests. |
 | `scripts/cloud-setup.sh` | Noninteractive dependency installation. |
+
+## Benchmark
+
+`bench/cases/` contains 10 realistic refactors with one planted silent bug each: both versions return normally but return different values. Each case includes `old.ts`, `new.ts`, and an `expect.json` input proven by tests to trigger the bug.
+
+With Ollama running and `gemma4:e4b` available, run from the repository root with `DIFFWITNESS_REPLAY` unset:
+
+```sh
+npx tsx scripts/bench.ts --runs-per-case 3 --random 2000
+```
+
+The script prints a Markdown table and writes `bench/results.md`. It reports the fraction of model runs finding a silent divergence, silent hits among 2000 random inputs per case, and average witness runtime. The random baseline uses seed 1 and infers input shapes from the planted failing input; this gives random sampling useful information and favors random. Replay runs validate the script but do not measure live model performance.
+
+<!-- RESULTS: integrator fills benchmark numbers -->
 
 ## Tech and models used
 
