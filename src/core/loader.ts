@@ -5,16 +5,17 @@ import type { LoadedFn } from './types';
 const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 };
 
 /** Reads a .ts file and delegates to loadFunctionFromSource. Issue #1. */
-export async function loadFunction(file: string): Promise<LoadedFn> {
-  return loadFunctionFromSource(await readFile(file, 'utf8'), file);
+export async function loadFunction(file: string, fn?: string): Promise<LoadedFn> {
+  return loadFunctionFromSource(await readFile(file, 'utf8'), file, fn);
 }
 
 /**
  * Parses TS source that exports exactly one function (`export function f` or
  * `export const f = (...) => ...` / function expression) and has no imports.
+ * With fn, selects that exported function instead. The whole file is retained, including helpers.
  * Throws a clear Error otherwise. Never executes the code. Issue #1.
  */
-export function loadFunctionFromSource(source: string, file = '<source>'): LoadedFn {
+export function loadFunctionFromSource(source: string, file = '<source>', fn?: string): LoadedFn {
   const out = ts.transpileModule(source, { compilerOptions, fileName: file, reportDiagnostics: true });
   const [diag] = out.diagnostics ?? [];
   if (diag) {
@@ -56,6 +57,10 @@ export function loadFunctionFromSource(source: string, file = '<source>'): Loade
         }
       }
     }
+  }
+  if (fn !== undefined) {
+    if (!names.has(fn)) throw new Error(`${file}: no exported function named "${fn}"`);
+    return { name: fn, source, code: out.outputText };
   }
   if (names.size === 0) {
     throw new Error(`${file}: no exported function; expected "export function f(...)" or "export const f = (...) => ..."`);
