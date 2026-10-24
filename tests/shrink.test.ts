@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { candidates, shrink } from '../src/core/shrink';
 
 describe('shrink', () => {
+  it('drops later duplicate candidates while preserving order', () => {
+    expect(candidates('aab')).toEqual(['', 'aa', 'ab']);
+    expect(candidates([1, 1])).toEqual([[], [1], [0, 1], [1, 0]]);
+    const nested = candidates({ value: ['aab', 'aab'] });
+    expect(nested.map(value => JSON.stringify(value))).toEqual([...new Set(nested.map(value => JSON.stringify(value)))]);
+  });
   it('shrinks a leading-zero string without substituting characters', async () => {
     const result = await shrink(['00128'], async ([s]) => typeof s === 'string' && s.length >= 2 && s.startsWith('0'));
     expect(result.args).toEqual(['00']);
