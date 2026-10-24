@@ -13,6 +13,7 @@ const { values } = parseArgs({ options: {
   'runs-per-case': { type: 'string', default: '3' },
   random: { type: 'string', default: '2000' },
   cases: { type: 'string', default: 'bench/cases' },
+  out: { type: 'string', default: 'bench/results.md' },
 } });
 const runs = Number(values['runs-per-case']);
 const random = Number(values.random);
@@ -24,7 +25,7 @@ const hypothesizer = hypothesizerFromEnv();
 const lines = [
   '# Refactor benchmark',
   '',
-  `Hypothesizer: ${hypothesizer.label}. Runs per case: ${runs}. Random seed: 1 (reset per case).`,
+  `Hypothesizer: ${hypothesizer.label}. Runs per case: ${runs}. Random seed: 1 (reset per case). Cases: ${values.cases}. Coverage feedback: ${process.env.DIFFWITNESS_NO_COVERAGE === "1" ? "off" : "on"}.`,
   ...(process.env.DIFFWITNESS_REPLAY === '1' ? ['', 'Replay validation only; these are not live model measurements. Missing fixture keys yield no hypotheses.'] : []),
   '',
   '| case | model silent hit rate | random silent hits / R | model avg seconds |',
@@ -38,7 +39,7 @@ for (const name of readdirSync(values.cases!).sort()) {
   let hits = 0;
   const start = performance.now();
   for (let i = 0; i < runs; i++) {
-    const report = await witness({ oldFile, newFile, hypothesizer, baselineRuns: 0 });
+    const report = await witness({ oldFile, newFile, hypothesizer, baselineRuns: 0, coverage: process.env.DIFFWITNESS_NO_COVERAGE !== '1' });
     if (report.divergences.some(d => silent(d.pair))) hits++;
   }
   const seconds = (performance.now() - start) / 1000 / runs;
@@ -58,4 +59,4 @@ for (const name of readdirSync(values.cases!).sort()) {
 lines.push('', 'Model timing includes the complete witness pipeline (loading, hypotheses, execution, and shrinking); the separate random baseline is excluded.', '');
 const markdown = lines.join('\n');
 console.log(markdown);
-writeFileSync('bench/results.md', markdown);
+writeFileSync(values.out!, markdown);

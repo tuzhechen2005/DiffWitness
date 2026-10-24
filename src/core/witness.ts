@@ -14,6 +14,8 @@ export interface WitnessOptions {
   timeoutMs?: number;
   baselineRuns?: number;
   seed?: number;
+  /** Feed uncovered branches to round 2 (default true); off reproduces the pre-coverage pipeline for ablations. */
+  coverage?: boolean;
 }
 
 const diverges = (p: Pair) => !sameOutcome(p.old, p.new);
@@ -32,7 +34,8 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
     for (const round of [1, 2] as const) {
       rounds = round;
       const input: ProposeInput = { old: oldFn, new: newFn, round, previous: [...trials] };
-      if (round === 2) input.uncovered = uncovered();
+      const useCov = o.coverage ?? true;
+      if (round === 2 && useCov) input.uncovered = uncovered();
       const hyps = await o.hypothesizer.propose(input);
       for (const h of hyps.slice(0, 8)) {
         const pair = await runner.run(h.args);
@@ -43,7 +46,7 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
         trials.push({ hypothesis: h, pair });
       }
       // Round 2 hunts for silent divergences (both return, values differ) and for code no input reached yet.
-      if (trials.some((t) => diverges(t.pair) && kinds(t.pair) === 'return/return') && uncovered().length === 0) break;
+      if (trials.some((t) => diverges(t.pair) && kinds(t.pair) === 'return/return') && (!useCov || uncovered().length === 0)) break;
     }
 
     const byArgs = new Map<string, Divergence>();
