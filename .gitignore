@@ -24,3 +24,6 @@ coverage/
 
 # DiffWitness output
 diffwitness.test.ts
+
+# Local agent worktrees
+.claude/
