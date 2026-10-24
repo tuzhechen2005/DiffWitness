@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -44,12 +44,38 @@ describe('ollama', () => {
     expect(bodyOf(f).messages[0].content).toContain(old.source);
   });
 
-  it('returns [] with a stderr warning on malformed JSON', async () => {
-    vi.stubGlobal('fetch', reply('not json'));
+  it.each(['not json', '{}'])('retries %s with the same request and records only the valid reply', async (bad) => {
+    const file = tmp();
+    const rec = ollamaHypothesizer({ url: 'http://x:1', model: 'm', recordTo: file });
+    const f = reply(JSON.stringify({ hypotheses: [{ reason: 'r', args: ['a'] }] }));
+    f.mockImplementationOnce(async () => new Response(JSON.stringify({ message: { content: bad } })))
+      .mockImplementationOnce(async () => {
+        expect(existsSync(file)).toBe(false);
+        return new Response(JSON.stringify({ message: { content: JSON.stringify({ hypotheses: [{ reason: 'r', args: ['a'] }] }) } }));
+      });
+    vi.stubGlobal('fetch', f);
+    expect(await rec.propose(input)).toEqual([{ reason: 'r', args: ['a'], round: 1 }]);
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(f.mock.calls[1][0]).toBe(f.mock.calls[0][0]);
+    expect((f.mock.calls[1][1] as RequestInit).body).toBe((f.mock.calls[0][1] as RequestInit).body);
+    expect(await replayHypothesizer(file).propose(input)).toEqual([{ reason: 'r', args: ['a'], round: 1 }]);
+  });
+
+  it.each(['not json', '{}'])('returns [] after two %s replies without recording', async (bad) => {
+    const file = tmp();
+    const rec = ollamaHypothesizer({ url: 'http://x:1', model: 'm', recordTo: file });
+    const f = reply(bad);
+    vi.stubGlobal('fetch', f);
     const w = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
-    expect(await h.propose(input)).toEqual([]);
-    expect(w).toHaveBeenCalledOnce();
-    w.mockRestore();
+    try {
+      expect(await rec.propose(input)).toEqual([]);
+      expect(f).toHaveBeenCalledTimes(2);
+      expect(w).toHaveBeenCalledOnce();
+      expect(w).toHaveBeenCalledWith(expect.stringContaining('using no hypotheses'));
+      expect(existsSync(file)).toBe(false);
+    } finally {
+      w.mockRestore();
+    }
   });
 
   it('drops bad items and caps at 8', async () => {
@@ -76,10 +102,14 @@ describe('ollama', () => {
   });
 
   it('non-200 and network errors name the URL and model and suggest --replay', async () => {
-    vi.stubGlobal('fetch', reply('', 500));
+    const http = reply('', 500);
+    vi.stubGlobal('fetch', http);
     await expect(h.propose(input)).rejects.toThrow(/http:\/\/x:1.*model m.*--replay/s);
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
+    expect(http).toHaveBeenCalledOnce();
+    const network = vi.fn(async () => { throw new TypeError('fetch failed'); });
+    vi.stubGlobal('fetch', network);
     await expect(h.propose(input)).rejects.toThrow(/http:\/\/x:1.*--replay/s);
+    expect(network).toHaveBeenCalledOnce();
   });
 
   it('records the fixture shape, preserving other entries', async () => {
