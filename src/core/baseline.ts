@@ -1,4 +1,4 @@
-import type { Args } from './types';
+import type { Args, Json } from './types';
 
 /** JSON shape of a value, inferred from one example. Issue #3. */
 export type Shape =
@@ -11,7 +11,15 @@ export type Shape =
 
 /** Shape of each positional arg. Arrays take the shape of their first element ('null' if empty). Issue #3. */
 export function inferShape(args: Args): Shape[] {
-  throw new Error(`not implemented (#3): ${args.length}`);
+  const shape = (value: Json): Shape => {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return { array: shape(value[0] ?? null) };
+    if (typeof value === 'object') {
+      return { object: Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shape(item)])) };
+    }
+    return typeof value as 'string' | 'number' | 'boolean';
+  };
+  return args.map(shape);
 }
 
 /**
@@ -20,10 +28,29 @@ export function inferShape(args: Args): Shape[] {
  * arrays 0-5 elements. Uses only `rng` so results are reproducible. Issue #3.
  */
 export function randomArgs(shapes: Shape[], rng: () => number): Args {
-  throw new Error(`not implemented (#3): ${shapes.length} ${typeof rng}`);
+  const generate = (shape: Shape): Json => {
+    if (shape === 'null') return null;
+    if (shape === 'boolean') return rng() < 0.5;
+    if (shape === 'number') {
+      const integer = rng() < 0.5;
+      const value = rng() * 2000 - 1000;
+      return integer ? Math.trunc(value) : value;
+    }
+    if (shape === 'string') {
+      return Array.from({ length: Math.floor(rng() * 11) }, () => String.fromCharCode(32 + Math.floor(rng() * 95))).join('');
+    }
+    if ('array' in shape) return Array.from({ length: Math.floor(rng() * 6) }, () => generate(shape.array));
+    return Object.fromEntries(Object.entries(shape.object).map(([key, item]) => [key, generate(item)]));
+  };
+  return shapes.map(generate);
 }
 
 /** Seeded PRNG returning floats in [0, 1). Issue #3. */
 export function mulberry32(seed: number): () => number {
-  throw new Error(`not implemented (#3): ${seed}`);
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let value = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
 }
