@@ -58,6 +58,22 @@ describe('coverage-guided round 2', () => {
   });
 });
 
+describe('type-aware hypotheses', () => {
+  it('drops hypotheses that violate the signature, counts them, and fuzzes from types', async () => {
+    const h: Hypothesizer = {
+      label: 'test',
+      async propose(input) {
+        if (input.round === 2) return [];
+        return [{ reason: 'leading zeros', args: ['00'], round: 1 }, { reason: 'wrong type', args: [42], round: 1 }];
+      },
+    };
+    const report = await witness({ oldFile: 'examples/order-id/old.ts', newFile: 'examples/order-id/new.ts', hypothesizer: h, baselineRuns: 50 });
+    expect(report.trials.map((t) => t.hypothesis.args)).toEqual([['00']]);
+    expect(report.droppedForType).toBe(1);
+    expect(report.baseline?.shapeFrom).toBe('types');
+  });
+});
+
 describe('cluster', () => {
   const d = (args: string[], oldCov: number[]): Divergence => ({
     args, reasons: [], originalArgs: [], shrinkSteps: 0,

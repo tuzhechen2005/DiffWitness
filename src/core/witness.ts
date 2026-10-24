@@ -3,6 +3,7 @@ import { sameOutcome } from './compare';
 import { instrument } from './coverage';
 import { createRunner } from './executor';
 import { loadFunction } from './loader';
+import { conforms, paramsOf, type Param } from './signature';
 import { shrink } from './shrink';
 import type { Args, BaselineResult, Divergence, Hypothesizer, Pair, ProposeInput, Runner, Trial, WitnessReport } from './types';
 
@@ -23,6 +24,8 @@ const kinds = (p: Pair) => `${p.old.kind}/${p.new.kind}`;
 
 export async function witness(o: WitnessOptions): Promise<WitnessReport> {
   const [oldFn, newFn] = await Promise.all([loadFunction(o.oldFile, o.fn), loadFunction(o.newFile, o.fn)]);
+  newFn.params = paramsOf(newFn);
+  let droppedForType = 0;
   const [oldCov, newCov] = [instrument(oldFn), instrument(newFn)];
   const runner = await createRunner(oldCov.fn, newCov.fn, { timeoutMs: o.timeoutMs ?? 1000 });
   try {
@@ -38,6 +41,7 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
       if (round === 2 && useCov) input.uncovered = uncovered();
       const hyps = await o.hypothesizer.propose(input);
       for (const h of hyps.slice(0, 8)) {
+        if (newFn.params && !conforms(h.args, newFn.params)) { droppedForType++; continue; }
         const pair = await runner.run(h.args);
         if ([pair.old, pair.new].some((x) => x.kind === 'throw' && x.name === 'DiffWitnessAsync'))
           throw new Error('async functions are not supported: DiffWitness compares synchronous pure functions');
@@ -75,7 +79,7 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
     }
 
     const first = trials[0]?.hypothesis.args;
-    const baseline = first && (await runBaseline(runner, first, o.baselineRuns ?? 2000, o.seed ?? 1));
+    const baseline = first && (await runBaseline(runner, first, newFn.params, o.baselineRuns ?? 2000, o.seed ?? 1));
     const found = [...byArgs.values()];
     // Without branches every divergence shares the empty path, so grouping would say nothing.
     const divergences = oldCov.branches.length + newCov.branches.length ? cluster(found) : found;
@@ -83,7 +87,7 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
       old: { covered: hit.old.size, total: oldCov.branches.length },
       new: { covered: hit.new.size, total: newCov.branches.length },
     };
-    return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences, baseline, coverage };
+    return { fnName: newFn.name, hypothesizer: o.hypothesizer.label, rounds, trials, divergences, baseline, coverage, ...(droppedForType && { droppedForType }) };
   } finally {
     await runner.close();
   }
@@ -104,10 +108,11 @@ export function cluster(ds: Divergence[]): Divergence[] {
   return [...groups.values()].flatMap((g, i) => g.sort(simpler).map((d) => ({ ...d, cluster: i })));
 }
 
-async function runBaseline(runner: Runner, example: Args, runs: number, seed: number): Promise<BaselineResult> {
-  const shapes = inferShape(example);
+async function runBaseline(runner: Runner, example: Args, params: Param[] | undefined, runs: number, seed: number): Promise<BaselineResult> {
+  const typed = !!params?.length && params.every((p) => p.shape);
+  const shapes = typed ? params.map((p) => p.shape!) : inferShape(example);
   const rng = mulberry32(seed);
-  const result: BaselineResult = { runs, divergent: 0, silent: 0, repros: [] };
+  const result: BaselineResult = { runs, divergent: 0, silent: 0, repros: [], shapeFrom: typed ? 'types' : 'example' };
   const seen = new Set<string>();
   for (let i = 0; i < runs; i++) {
     const args = randomArgs(shapes, rng);
