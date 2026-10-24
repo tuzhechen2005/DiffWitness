@@ -1,0 +1,114 @@
+{
+  "f9a33c476cb6b498": {
+    "example": "examples/order-id",
+    "source": "handwritten",
+    "rounds": {
+      "1": [
+        {
+          "reason": "Leading zeros are significant in the old version but parseInt drops them",
+          "args": [
+            "00128"
+          ]
+        },
+        {
+          "reason": "Alphanumeric ids pass the old regex but parseInt stops at the first letter",
+          "args": [
+            "A-12"
+          ]
+        },
+        {
+          "reason": "Trailing letters are kept by old, discarded by parseInt",
+          "args": [
+            "12abc"
+          ]
+        },
+        {
+          "reason": "Surrounding whitespace is trimmed by both",
+          "args": [
+            "  42 "
+          ]
+        },
+        {
+          "reason": "Negative-looking ids",
+          "args": [
+            "-5"
+          ]
+        }
+      ],
+      "2": []
+    }
+  },
+  "767812fd55d84899": {
+    "example": "examples/rounding",
+    "source": "handwritten",
+    "rounds": {
+      "1": [
+        {
+          "reason": "Math.round rounds half toward +Infinity, toFixed rounds half away from zero",
+          "args": [
+            -0.125
+          ]
+        },
+        {
+          "reason": "Binary floating point makes x.xx5 values land on either side of the half",
+          "args": [
+            2.675
+          ]
+        },
+        {
+          "reason": "Classic floating point rounding case",
+          "args": [
+            1.005
+          ]
+        },
+        {
+          "reason": "Zero",
+          "args": [
+            0
+          ]
+        }
+      ],
+      "2": []
+    }
+  },
+  "fbec7d72672fe8a9": {
+    "example": "examples/equivalent",
+    "source": "handwritten",
+    "rounds": {
+      "1": [
+        {
+          "reason": "Mixed case with surrounding spaces",
+          "args": [
+            "  A@B.COM "
+          ]
+        },
+        {
+          "reason": "Unicode characters that change length when lowercased",
+          "args": [
+            "İ"
+          ]
+        },
+        {
+          "reason": "Empty string",
+          "args": [
+            ""
+          ]
+        }
+      ],
+      "2": [
+        {
+          "reason": "Non-breaking space and line separator are trimmed in both orders",
+          "args": [
+            " X "
+          ]
+        },
+        {
+          "reason": "Non-string input should throw the same TypeError in both",
+          "args": [
+            null
+          ]
+        }
+      ]
+    }
+  }
+}

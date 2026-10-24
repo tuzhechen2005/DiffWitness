@@ -21,3 +21,6 @@ dist/
 build/
 coverage/
 *.log
+
+# DiffWitness output
+diffwitness.test.ts
