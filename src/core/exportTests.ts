@@ -33,7 +33,7 @@ export function exportVitest(opts: { fnName: string; importPath: string; items: 
   const { fnName, importPath, items } = opts;
   const tests = items.map(({ label, divergence }) => {
     const call = `${fnName}(${divergence.args.map(arg => literal(arg)).join(', ')})`;
-    const title = quote(`${label}: ${call}`);
+    const title = JSON.stringify(`${label}: ${call}`);
     const outcome = label === 'bug' ? divergence.pair.old : divergence.pair.new;
     if (outcome.kind === 'timeout') return `  it.skip(${title}, () => {\n    // timed out\n  });`;
     const assertion = outcome.kind === 'throw'
