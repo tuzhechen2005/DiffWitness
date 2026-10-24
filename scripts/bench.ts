@@ -12,6 +12,7 @@ import { witness } from '../src/core/witness';
 const { values } = parseArgs({ options: {
   'runs-per-case': { type: 'string', default: '3' },
   random: { type: 'string', default: '2000' },
+  cases: { type: 'string', default: 'bench/cases' },
 } });
 const runs = Number(values['runs-per-case']);
 const random = Number(values.random);
@@ -29,8 +30,8 @@ const lines = [
   '| case | model silent hit rate | random silent hits / R | model avg seconds |',
   '| --- | --- | --- | --- |',
 ];
-for (const name of readdirSync('bench/cases').sort()) {
-  const dir = join('bench/cases', name);
+for (const name of readdirSync(values.cases!).sort()) {
+  const dir = join(values.cases!, name);
   const oldFile = join(dir, 'old.ts');
   const newFile = join(dir, 'new.ts');
   const expected = JSON.parse(readFileSync(join(dir, 'expect.json'), 'utf8')) as { silent: Args };

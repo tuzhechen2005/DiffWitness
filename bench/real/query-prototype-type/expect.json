@@ -1,0 +1,9 @@
+{
+  "silent": [
+    "toString",
+    "1"
+  ],
+  "note": "An inherited Object.prototype method is mistaken for a custom value parser.",
+  "regression_commit": "https://github.com/sindresorhus/query-string/commit/7fd813338963583472586f228a74dcbfb067e785",
+  "fix_commit": "https://github.com/sindresorhus/query-string/commit/0682872f8ff7d3b2dc6bc284de17033f85994845"
+}

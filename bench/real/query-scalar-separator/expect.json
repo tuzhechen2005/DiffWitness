@@ -1,0 +1,8 @@
+{
+  "silent": [
+    "a-b"
+  ],
+  "note": "A scalar separator is emitted literally and is subsequently parsed as an array.",
+  "regression_commit": "https://github.com/sindresorhus/query-string/commit/f48a249188c423534ba9653d4a7978821edf1374",
+  "fix_commit": "https://github.com/sindresorhus/query-string/commit/b63dc568f2c5c77be0d3a3bf131c7a64d309aa12"
+}

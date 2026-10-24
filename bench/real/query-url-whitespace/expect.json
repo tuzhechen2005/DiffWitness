@@ -1,0 +1,8 @@
+{
+  "silent": [
+    "https://foo.bar?a=1#top\n"
+  ],
+  "note": "Trailing URL whitespace leaks into the decoded fragment identifier.",
+  "regression_commit": "https://github.com/sindresorhus/query-string/commit/b9ff3f8f1d7480c3553684425156a8b1c8e00c27",
+  "fix_commit": "https://github.com/sindresorhus/query-string/commit/1d91dbfcf1922c8c59216f532d4d8ab2abe67510"
+}
