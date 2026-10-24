@@ -1,5 +1,15 @@
 import type { Args, Json } from './types';
 
+function unique(values: Json[]): Json[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = JSON.stringify(value);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /**
  * Greedy shrink: repeatedly try smaller candidates of `args` and keep the first one for which
  * `stillFails` resolves true, until no candidate passes or `maxSteps` (default 200) predicate
@@ -66,11 +76,11 @@ export function candidates(value: Json): Json[] {
         }
       });
     }
-    return result;
+    return unique(result);
   }
   const entries = Object.entries(value);
-  return [
+  return unique([
     ...entries.map((_, i) => Object.fromEntries(entries.filter((_, j) => i !== j))),
     ...entries.flatMap(([key, item]) => candidates(item).map((smaller) => ({ ...value, [key]: smaller }))),
-  ];
+  ]);
 }

@@ -25,7 +25,7 @@ const report = (over: Partial<WitnessReport> = {}): WitnessReport => ({
       shrinkSteps: 7,
     },
   ],
-  baseline: { runs: 2000, divergent: 0 },
+  baseline: { runs: 2000, divergent: 0, silent: 0, repros: [] },
   ...over,
 });
 

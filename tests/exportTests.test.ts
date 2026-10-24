@@ -21,7 +21,7 @@ describe('exportVitest', () => {
     expect(code).toContain("import { describe, it, expect } from 'vitest';");
     expect(code).toContain("import { normalizeOrderId } from './new';");
     expect(code).toContain("describe('normalizeOrderId (DiffWitness)'");
-    expect(code).toContain('bug: normalizeOrderId(\\"00128\\")');
+    expect(code).toContain(String.raw`it("bug: normalizeOrderId(\"00128\")", () => {`);
     expect(code).toContain('expect(normalizeOrderId("00128")).toEqual("00128");');
   });
   it('pins intended throws to the new outcome and escapes error names', () => {

@@ -72,12 +72,24 @@ export async function witness(o: WitnessOptions): Promise<WitnessReport> {
 async function runBaseline(runner: Runner, example: Args, runs: number, seed: number): Promise<BaselineResult> {
   const shapes = inferShape(example);
   const rng = mulberry32(seed);
-  const result: BaselineResult = { runs, divergent: 0 };
+  const result: BaselineResult = { runs, divergent: 0, silent: 0, repros: [] };
+  const seen = new Set<string>();
   for (let i = 0; i < runs; i++) {
     const args = randomArgs(shapes, rng);
-    if (!diverges(await runner.run(args))) continue;
+    const pair = await runner.run(args);
+    if (!diverges(pair)) continue;
     result.divergent++;
+    if (kinds(pair) === 'return/return') result.silent++;
     result.firstDivergentArgs ??= args;
+    // Shrink a sample the same way as model hits so the two sets of repros are comparable.
+    if (result.divergent > 20) continue;
+    const want = kinds(pair);
+    const s = await shrink(args, async (a) => {
+      const p = await runner.run(a);
+      return diverges(p) && kinds(p) === want;
+    }, { maxSteps: 200 });
+    const key = JSON.stringify(s.args);
+    if (!seen.has(key)) seen.add(key), result.repros.push(s.args);
   }
   return result;
 }

@@ -1,0 +1,7 @@
+{
+  "silent": [
+    50,
+    50
+  ],
+  "note": "Orders exactly at the threshold lose free shipping."
+}

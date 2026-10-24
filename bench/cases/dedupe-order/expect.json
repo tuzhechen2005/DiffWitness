@@ -1,0 +1,10 @@
+{
+  "silent": [
+    [
+      "beta",
+      "alpha",
+      "beta"
+    ]
+  ],
+  "note": "Sorting loses the first-occurrence order."
+}

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { Hypothesis, Hypothesizer, LoadedFn, Outcome, ProposeInput } from './types';
@@ -130,12 +131,12 @@ export function replayHypothesizer(fixtureFile: string): Hypothesizer {
 }
 
 /**
- * replay if opts.replay or DIFFWITNESS_REPLAY=1 (file: DIFFWITNESS_FIXTURES ?? fixtures/replay.json);
+ * replay if opts.replay or DIFFWITNESS_REPLAY=1 (file: DIFFWITNESS_FIXTURES ?? the package's fixtures/gemma-recorded.json, real recorded Gemma output);
  * else Ollama with OLLAMA_URL ?? http://localhost:11434, DIFFWITNESS_MODEL ?? gemma4:e4b,
  * recording to DIFFWITNESS_RECORD if set. Issue #4.
  */
 export function hypothesizerFromEnv(env: NodeJS.ProcessEnv = process.env, opts: { replay?: boolean } = {}): Hypothesizer {
-  if (opts.replay || env.DIFFWITNESS_REPLAY === '1') return replayHypothesizer(env.DIFFWITNESS_FIXTURES ?? 'fixtures/replay.json');
+  if (opts.replay || env.DIFFWITNESS_REPLAY === '1') return replayHypothesizer(env.DIFFWITNESS_FIXTURES ?? fileURLToPath(new URL('../../fixtures/gemma-recorded.json', import.meta.url)));
   return ollamaHypothesizer({
     url: env.OLLAMA_URL ?? 'http://localhost:11434',
     model: env.DIFFWITNESS_MODEL ?? 'gemma4:e4b',

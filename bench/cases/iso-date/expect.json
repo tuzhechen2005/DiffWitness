@@ -1,0 +1,6 @@
+{
+  "silent": [
+    "2026-01-01T00:30:00+02:00"
+  ],
+  "note": "UTC conversion changes the supplied local calendar date."
+}

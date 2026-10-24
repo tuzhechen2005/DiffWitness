@@ -1,0 +1,6 @@
+{
+  "silent": [
+    "token=a=b"
+  ],
+  "note": "Splitting truncates values containing an equals sign."
+}

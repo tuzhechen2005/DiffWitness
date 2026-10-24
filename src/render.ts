@@ -56,7 +56,14 @@ export function renderReport(r: WitnessReport): string {
   }
 
   out.push('');
-  if (r.baseline) out.push(`Random fuzzing: ${pc.bold(`${r.baseline.divergent} of ${r.baseline.runs}`)} runs diverged`);
-  out.push(`Model:          ${pc.bold(pc.green(`${hits} of ${r.trials.length}`))} hypotheses diverged`);
+  const silent = r.divergences.filter((d) => d.pair.old.kind === 'return' && d.pair.new.kind === 'return').length;
+  if (r.baseline) {
+    const b = r.baseline;
+    out.push(`Random fuzzing: ${pc.bold(`${b.divergent} of ${b.runs}`)} runs diverged, ${pc.bold(String(b.silent))} silent (both returned); sample shrank to ${b.repros.length} distinct repros`);
+  }
+  out.push(`Model:          ${pc.bold(pc.green(`${hits} of ${r.trials.length}`))} hypotheses diverged, ${pc.bold(pc.green(String(silent)))} silent, ${r.divergences.length} distinct repros`);
+  // Show both sets side by side instead of claiming exclusivity: exact-match comparison would overstate it.
+  if (r.baseline?.repros.length) out.push(pc.dim(`  random repros: ${r.baseline.repros.slice(0, 10).map(fmtArgs).join(' ')}${r.baseline.repros.length > 10 ? ' …' : ''}`));
+  if (r.divergences.length) out.push(`  model repros:  ${r.divergences.map((d) => fmtArgs(d.args)).join(' ')}`);
   return out.join('\n');
 }
