@@ -9,7 +9,7 @@ import type { Divergence, Label, LabeledDivergence } from './core/types';
 import { witness } from './core/witness';
 import { fmtArgs, jsonSafe, renderReport } from './render';
 
-export const USAGE = 'usage: diffwitness <old.ts> <new.ts> [--label bug|intended] [--json] [--replay] [--out file] [--runs n]';
+export const USAGE = 'usage: diffwitness <old.ts> <new.ts> [--label bug|intended] [--json] [--replay] [--out file] [--runs n] [--fn name]';
 
 /** Relative import specifier from the test file to the new source file, without `.ts`. */
 export function importPathFor(out: string, newFile: string): string {
@@ -31,6 +31,7 @@ export function parseCli(argv: string[]) {
         replay: { type: 'boolean' },
         out: { type: 'string', default: 'diffwitness.test.ts' },
         runs: { type: 'string' },
+        fn: { type: 'string' },
       },
     });
   } catch (e) {
@@ -41,7 +42,7 @@ export function parseCli(argv: string[]) {
   if (values.label !== undefined && values.label !== 'bug' && values.label !== 'intended') throw new UsageError('--label must be bug or intended');
   const runs = values.runs === undefined ? undefined : Number(values.runs);
   if (runs !== undefined && !(Number.isInteger(runs) && runs > 0)) throw new UsageError('--runs must be a positive integer');
-  return { oldFile: positionals[0], newFile: positionals[1], label: values.label as Label | undefined, json: !!values.json, replay: !!values.replay, out: values.out as string, runs };
+  return { oldFile: positionals[0], newFile: positionals[1], label: values.label as Label | undefined, json: !!values.json, replay: !!values.replay, out: values.out as string, runs, fn: values.fn };
 }
 
 async function labelAll(ds: Divergence[], fixed: Label | undefined, fnName: string): Promise<LabeledDivergence[]> {
@@ -64,7 +65,7 @@ async function labelAll(ds: Divergence[], fixed: Label | undefined, fnName: stri
 async function main(argv: string[]) {
   const o = parseCli(argv);
   const hypothesizer = hypothesizerFromEnv(process.env, { replay: o.replay });
-  const report = await witness({ oldFile: o.oldFile, newFile: o.newFile, hypothesizer, baselineRuns: o.runs });
+  const report = await witness({ oldFile: o.oldFile, newFile: o.newFile, hypothesizer, baselineRuns: o.runs, fn: o.fn });
   if (o.json) return console.log(JSON.stringify(jsonSafe(report), null, 2));
 
   console.log(renderReport(report));

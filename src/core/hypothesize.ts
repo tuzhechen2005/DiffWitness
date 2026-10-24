@@ -85,38 +85,43 @@ export function ollamaHypothesizer(opts: { url: string; model: string; recordTo?
   return {
     label: `${opts.model} @ ${opts.url}`,
     async propose(input) {
-      let content: unknown;
-      try {
-        const res = await fetch(`${opts.url}/api/chat`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model: opts.model,
-            stream: false,
-            format: SCHEMA,
-            messages: [{ role: 'user', content: buildPrompt(input) }],
-            options: { temperature: 0.2 },
-          }),
-          signal: AbortSignal.timeout(120_000),
-        });
-        if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-        content = ((await res.json()) as { message?: { content?: unknown } }).message?.content;
-      } catch (e) {
-        const why = e instanceof Error ? e.message : String(e);
-        throw new Error(`Ollama request to ${opts.url} (model ${opts.model}) failed: ${why}. Is Ollama running? Use --replay to run from fixtures.`);
-      }
-
       const hyps: Hypothesis[] = [];
-      try {
-        const items = (JSON.parse(String(content)) as { hypotheses?: unknown }).hypotheses;
-        if (!Array.isArray(items)) throw new Error('no hypotheses array');
-        for (const it of items) {
-          if (hyps.length === 8) break;
-          if (it && typeof it.reason === 'string' && Array.isArray(it.args)) hyps.push({ reason: it.reason, args: it.args, round: input.round });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let content: unknown;
+        try {
+          const res = await fetch(`${opts.url}/api/chat`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: opts.model,
+              stream: false,
+              format: SCHEMA,
+              messages: [{ role: 'user', content: buildPrompt(input) }],
+              options: { temperature: 0.2 },
+            }),
+            signal: AbortSignal.timeout(120_000),
+          });
+          if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+          content = ((await res.json()) as { message?: { content?: unknown } }).message?.content;
+        } catch (e) {
+          const why = e instanceof Error ? e.message : String(e);
+          throw new Error(`Ollama request to ${opts.url} (model ${opts.model}) failed: ${why}. Is Ollama running? Use --replay to run from fixtures.`);
         }
-      } catch (e) {
-        process.stderr.write(`diffwitness: unparsable model output (${e instanceof Error ? e.message : e}); using no hypotheses\n`);
-        return [];
+
+        try {
+          const items = (JSON.parse(String(content)) as { hypotheses?: unknown }).hypotheses;
+          if (!Array.isArray(items)) throw new Error('no hypotheses array');
+          for (const it of items) {
+            if (hyps.length === 8) break;
+            if (it && typeof it.reason === 'string' && Array.isArray(it.args)) hyps.push({ reason: it.reason, args: it.args, round: input.round });
+          }
+        } catch (e) {
+          if (attempt === 0) continue;
+          process.stderr.write(`diffwitness: unparsable model output (${e instanceof Error ? e.message : e}); using no hypotheses\n`);
+          return [];
+        }
+
+        break;
       }
 
       if (opts.recordTo) {
